@@ -192,7 +192,7 @@ class TCRgpu:
         self.result_dist = result_dist
         return result, result_dist
 
-    def sanity_nn_seqs(self, i, max_dist = 150, mode= None):
+    def sanity_test_nn_seqs(self, i, max_dist = 150, mode= None):
         """
         View nearest neighbor sequences for a given TCR.
 
