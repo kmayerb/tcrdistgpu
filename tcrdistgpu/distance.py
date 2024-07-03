@@ -99,6 +99,38 @@ class TCRgpu:
            second_half = seq[seq_length // 2:]
            return first_half + ['_'] * total_padding + second_half
 
+
+    def encode_tcrs_b(self, tcrs = None):
+            """
+            Encode TCR sequences (BETA ONLY) using the parameters vector.
+
+            Parameters:
+            -----------
+            tcrs : DataFrame, optional
+                DataFrame containing TCR sequences. If None, uses self.tcrs.
+
+            Returns:
+            --------
+            ndarray
+                Encoded TCR sequences as a numpy array.
+            """
+            if tcrs is None:
+                tcrs = self.tcrs
+            #cdr3amat = np.array([self.pad_center(seq = list(seq), target_length=self.target_length ) for seq in self.tcrs[self.cdr3a_col]])
+            #cdr3amatint = np.vectorize(self.params_vec.get)(cdr3amat)
+            cdr3bmat = np.array([self.pad_center(seq=list(seq), target_length=self.target_length ) for seq in self.tcrs[self.cdr3b_col]])
+            cdr3bmatint = np.vectorize(self.params_vec.get)(cdr3bmat)
+            #self.cdr3amatint = cdr3amatint
+            self.cdr3bmatint = cdr3bmatint
+            cols_to_use = slice(3, -2) #truncate CDR3s
+            encoded = np.column_stack([
+                np.vectorize(self.params_vec.get)(tcrs[self.vb_col]),
+                cdr3bmatint[:,cols_to_use]
+            ])
+            self.encoded = encoded
+            return encoded
+
+
     def encode_tcrs(self, tcrs = None):
         """
         Encode TCR sequences using the parameters vector.
