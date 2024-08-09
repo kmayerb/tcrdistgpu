@@ -8,6 +8,7 @@
 import numpy as np
 import pandas as pd
 import time
+from tqdm import tqdm
 
 modes = ['apple_silicon', 'cuda', 'cpu']
 
@@ -32,6 +33,7 @@ class TCRgpu:
     """
     def __init__(self, 
             tcrs = None, 
+            tcrs2 = None,
             mode = "cuda", 
             kbest = 10, 
             chunk_size = 1000):
@@ -50,6 +52,7 @@ class TCRgpu:
             Size of chunks for processing. Default is 1000.
         """
         self.tcrs = tcrs
+        self.tcrs2 = tcrs2
         
         self.mode = mode 
         self.kbest = kbest
@@ -118,7 +121,7 @@ class TCRgpu:
                 tcrs = self.tcrs
             #cdr3amat = np.array([self.pad_center(seq = list(seq), target_length=self.target_length ) for seq in self.tcrs[self.cdr3a_col]])
             #cdr3amatint = np.vectorize(self.params_vec.get)(cdr3amat)
-            cdr3bmat = np.array([self.pad_center(seq=list(seq), target_length=self.target_length ) for seq in self.tcrs[self.cdr3b_col]])
+            cdr3bmat = np.array([self.pad_center(seq=list(seq), target_length=self.target_length ) for seq in tcrs[self.cdr3b_col]])
             cdr3bmatint = np.vectorize(self.params_vec.get)(cdr3bmat)
             #self.cdr3amatint = cdr3amatint
             self.cdr3bmatint = cdr3bmatint
@@ -126,6 +129,36 @@ class TCRgpu:
             encoded = np.column_stack([
                 np.vectorize(self.params_vec.get)(tcrs[self.vb_col]),
                 cdr3bmatint[:,cols_to_use]
+            ])
+            self.encoded = encoded
+            return encoded
+
+    def encode_tcrs_a(self, tcrs = None):
+            """
+            Encode TCR sequences (BETA ONLY) using the parameters vector.
+
+            Parameters:
+            -----------
+            tcrs : DataFrame, optional
+                DataFrame containing TCR sequences. If None, uses self.tcrs.
+
+            Returns:
+            --------
+            ndarray
+                Encoded TCR sequences as a numpy array.
+            """
+            if tcrs is None:
+                tcrs = self.tcrs
+            #cdr3amat = np.array([self.pad_center(seq = list(seq), target_length=self.target_length ) for seq in self.tcrs[self.cdr3a_col]])
+            #cdr3amatint = np.vectorize(self.params_vec.get)(cdr3amat)
+            cdr3amat = np.array([self.pad_center(seq=list(seq), target_length=self.target_length ) for seq in tcrs[self.cdr3a_col]])
+            cdr3amatint = np.vectorize(self.params_vec.get)(cdr3amat)
+            #self.cdr3amatint = cdr3amatint
+            self.cdr3amatint = cdr3amatint
+            cols_to_use = slice(3, -2) #truncate CDR3s
+            encoded = np.column_stack([
+                np.vectorize(self.params_vec.get)(tcrs[self.va_col]),
+                cdr3amatint[:,cols_to_use]
             ])
             self.encoded = encoded
             return encoded
@@ -147,9 +180,9 @@ class TCRgpu:
         """
         if tcrs is None:
             tcrs = self.tcrs
-        cdr3amat = np.array([self.pad_center(seq = list(seq), target_length=self.target_length ) for seq in self.tcrs[self.cdr3a_col]])
+        cdr3amat = np.array([self.pad_center(seq = list(seq), target_length=self.target_length ) for seq in tcrs[self.cdr3a_col]])
         cdr3amatint = np.vectorize(self.params_vec.get)(cdr3amat)
-        cdr3bmat = np.array([self.pad_center(seq=list(seq), target_length=self.target_length ) for seq in self.tcrs[self.cdr3b_col]])
+        cdr3bmat = np.array([self.pad_center(seq=list(seq), target_length=self.target_length ) for seq in tcrs[self.cdr3b_col]])
         cdr3bmatint = np.vectorize(self.params_vec.get)(cdr3bmat)
         self.cdr3amatint = cdr3amatint
         self.cdr3bmatint = cdr3bmatint
@@ -163,7 +196,7 @@ class TCRgpu:
         self.encoded = encoded
         return encoded
 
-    def compute(self, mode = None, sort = True):
+    def compute(self, encoded1= None, encoded2=None, mode = None, sort = True):
         """
         Compute the nearest neighbors for the TCR sequences.
 
@@ -191,14 +224,19 @@ class TCRgpu:
         else:
             raise ValueError("Mode must be in {modes}")
 
-        tcrs1=mx.array(self.encoded).astype(mx.uint8)    
-        tcrs2=mx.array(self.encoded).astype(mx.uint8)
+        if encoded1 is None:
+            encoded1 = self.encoded
+        if encoded2 is None:
+            encoded2 = self.encoded
+
+        tcrs1=mx.array(encoded1).astype(mx.uint8)    
+        tcrs2=mx.array(encoded2).astype(mx.uint8)
         
         start_time = time.time()
         result=mx.zeros((tcrs1.shape[0],self.kbest),dtype=mx.uint32) #initialize result array for indices
         result_dist = mx.zeros((tcrs1.shape[0],self.kbest),dtype=mx.uint32) 
 
-        for ch in range(0, tcrs1.shape[0], self.chunk_size): #we process in chunks across tcr1 to not run out of memory
+        for ch in tqdm(range(0, tcrs1.shape[0], self.chunk_size)): #we process in chunks across tcr1 to not run out of memory
             chunk_end = min(ch + self.chunk_size, tcrs1.shape[0])
             row_range = slice(ch, chunk_end)
             
@@ -224,7 +262,7 @@ class TCRgpu:
         self.result_dist = result_dist
         return result, result_dist
 
-    def sanity_test_nn_seqs(self, i, max_dist = 150, mode= None):
+    def sanity_test_nn_seqs(self, i, tcrs = None, tcrs2= None, max_dist = 150, mode= None):
         """
         View nearest neighbor sequences for a given TCR.
 
@@ -258,13 +296,18 @@ class TCRgpu:
         """
         FOR SANITY TESTING
         """
-        
+        if tcrs is None:
+            tcrs = self.tcrs
+        if tcrs2 is None:
+            tcrs2 = self.tcrs2
+
         max_index = np.searchsorted(dists, max_dist, side='right') - 1
         if max_index == 0:
             max_index = 1
-        seq_i = self.tcrs.iloc[i,:].to_list()
+        seq_i = tcrs.iloc[i,:].to_list()
+        
         for ix, j in enumerate(idx[0:max_index]):
-            seq_j = self.tcrs.iloc[j,:].to_list()
+            seq_j = tcrs2.iloc[j,:].to_list()
             print(i,j,dists[ix],seq_i, seq_j)
 
 def sort_out_k(dists, k= 10):
