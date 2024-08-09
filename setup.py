@@ -7,5 +7,8 @@ setup(
     install_requires=[
         'pandas','numpy','pytest'
     ],
-    include_package_data=True
+    include_package_data=True,
+     package_data={
+        'my_package': ['data/*.tsv'],
+    },
 )
