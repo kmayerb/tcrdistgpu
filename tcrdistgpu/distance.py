@@ -9,6 +9,8 @@ import numpy as np
 import pandas as pd
 import time
 from tqdm import tqdm
+from pathlib import Path
+current_dir = Path(__file__).parent
 
 modes = ['apple_silicon', 'cuda', 'cpu']
 
@@ -68,14 +70,14 @@ class TCRgpu:
         self.submat = self.load_substitution_matrix()
         
     def load_params_vec(self):
-        params_df = pd.read_csv("data/params_v2.tsv", sep="\t", header=None, names=["feature", "value"])
+        params_df = pd.read_csv(os.path.join(current_dir,"data/params_v2.tsv"), sep="\t", header=None, names=["feature", "value"])
         params_vec = dict(zip(params_df["feature"], params_df["value"]))
         return params_vec
     def load_substitution_matrix(self):
-        submat = np.array(np.loadtxt('data/TCRdist_matrix_mega.tsv', delimiter='\t', dtype=np.int16))
+        submat = np.array(np.loadtxt(os.path.join(current_dir,'data/TCRdist_matrix_mega.tsv'), delimiter='\t', dtype=np.int16))
         return submat
     def load_tst_tcr(self):
-        tst_tcr = pd.read_csv("data/tmp_tcr.tsv", sep="\t")
+        tst_tcr = pd.read_csv(os.path.join(current_dir,"data/tmp_tcr.tsv"), sep="\t")
         return tst_tcr
     def pad_center(self, seq, target_length): # function to pad center with gaps until target length
         """
