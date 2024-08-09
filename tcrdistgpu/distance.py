@@ -12,7 +12,7 @@ from tqdm import tqdm
 from pathlib import Path
 import os 
 
-current_dir = Path(__file__)
+current_dir = Path(__file__).parent
 
 modes = ['apple_silicon', 'cuda', 'cpu']
 
