@@ -10,6 +10,8 @@ import pandas as pd
 import time
 from tqdm import tqdm
 from pathlib import Path
+import os 
+
 current_dir = Path(__file__)
 
 modes = ['apple_silicon', 'cuda', 'cpu']
