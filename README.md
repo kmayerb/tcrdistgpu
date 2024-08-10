@@ -4,6 +4,20 @@
 
 The idea and original code for a GPU accerlated TCRdist -- mikhail.pogorelyy@stjude.org (Mikhail Pogorelyy)
 
+## Usage for KNN
+
+```python 
+knn_tcr(tcr_train,
+        tcr_test,
+        label_train,
+        label_test = None,
+        hain = "a", 
+        mode = "cpu", 
+        kbest = 20,
+        krange = range(1,21,2),
+        adjust_class_weights = True)
+```
+
 ## Usage with CPU
 
 dependencies: pandas, numpy
