@@ -102,7 +102,7 @@ class TCRgpu:
            return seq[:target_length]
         else:
            total_padding = target_length - seq_length
-           first_half = seq[:seq_length // 2]
+           first_half  = seq[:seq_length // 2]
            second_half = seq[seq_length // 2:]
            return first_half + ['_'] * total_padding + second_half
 
@@ -216,6 +216,8 @@ class TCRgpu:
         tuple
             Tuple containing two ndarrays: indices of the nearest neighbors and their distances.
         """
+        # TODO ADD calculate_chunk_size() to ensure chunksize is appropriate
+        
         if mode is None:
             mode = self.mode
         if mode == "cpu":
@@ -266,6 +268,33 @@ class TCRgpu:
         self.result_dist = result_dist
         return result, result_dist
 
+
+    def compute_full_(self, encoded1= None, encoded2=None, mode = None):
+        if mode is None:
+            mode = self.mode
+        if mode == "cpu":
+            import numpy as mx
+        elif mode == "cuda":
+            import cupy as mx 
+            self.submat = mx.array(self.submat)
+        elif mode == "apple_silicon":
+            import mlx.core as mx #use this for apple silicon
+        else:
+            raise ValueError("Mode must be in {modes}")
+
+        if encoded1 is None:
+            encoded1 = self.encoded
+        if encoded2 is None:
+            encoded2 = self.encoded
+
+        tcrs1=mx.array(encoded1).astype(mx.uint8)    
+        tcrs2=mx.array(encoded2).astype(mx.uint8)
+        
+        start_time = time.time()
+        dists = mx.sum(self.submat[tcrs1[row_range, None, :], tcrs2[ None,:, :]],axis=2)
+        return dists
+
+
     def sanity_test_nn_seqs(self, i, tcrs = None, tcrs2= None, max_dist = 150, mode= None):
         """
         View nearest neighbor sequences for a given TCR.
@@ -314,6 +343,14 @@ class TCRgpu:
             seq_j = tcrs2.iloc[j,:].to_list()
             print(i,j,dists[ix],seq_i, seq_j)
 
+
+def calculate_chunk_size(i: int, max_size = 10000000) -> int:
+    # Calculate the maximum chunk size
+    chunk_size = max_size // i
+    return chunk_size
+i = 1001
+chunk_size = calculate_chunk_size(i)
+print(f"For i = {i}, the chunk size is {chunk_size}.")
 
 def sort_out_k(dists, k= 10):
     partitioned_indices = np.argpartition(dists, kth =k, axis=1)
