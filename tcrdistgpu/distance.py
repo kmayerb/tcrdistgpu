@@ -358,8 +358,10 @@ class TCRgpu:
             
             dists = mx.sum(self.submat[tcrs1[row_range, None, :], tcrs2[ None,:, :]],axis=2)
 
-            if mode == "coda":
+            if mode == "cuda":
                 dists = dists.get()
+
+                
             
             # map i (global row indice) to ix (index in the chunk)
             map_ix_to_i = {ix:i for ix,i in enumerate(range(ch, chunk_end))}
