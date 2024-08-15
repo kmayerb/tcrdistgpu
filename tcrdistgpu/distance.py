@@ -13,8 +13,8 @@ from pathlib import Path
 import os 
 from scipy.sparse import dok_matrix
 
-#current_dir = Path(__file__).parent
-current_dir = '/fh/fast/gilbert_p/kmayerbl/TCRdist_GPU/tcrdistgpu'
+current_dir = Path(__file__).parent
+#current_dir = '/fh/fast/gilbert_p/kmayerbl/TCRdist_GPU/tcrdistgpu'
 modes = ['apple_silicon', 'cuda', 'cpu']
 
 class TCRgpu:
