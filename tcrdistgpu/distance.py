@@ -11,9 +11,10 @@ import time
 from tqdm import tqdm
 from pathlib import Path
 import os 
+from scipy.sparse import dok_matrix
 
-current_dir = Path(__file__).parent
-
+#current_dir = Path(__file__).parent
+current_dir = '/fh/fast/gilbert_p/kmayerbl/TCRdist_GPU/tcrdistgpu'
 modes = ['apple_silicon', 'cuda', 'cpu']
 
 class TCRgpu:
@@ -39,8 +40,11 @@ class TCRgpu:
             tcrs = None, 
             tcrs2 = None,
             mode = "cuda", 
-            kbest = 10, 
-            chunk_size = 1000):
+            chunk_size = 1000, 
+            cdr3a_col = 'cdr3a',
+            cdr3b_col = 'cdr3b',
+            va_col = 'va',
+            vb_col = 'vb'):
         """
         Initialize the TCRgpu object.
 
@@ -59,13 +63,14 @@ class TCRgpu:
         self.tcrs2 = tcrs2
         
         self.mode = mode 
-        self.kbest = kbest
+        
         self.chunk_size = chunk_size
 
-        self.cdr3a_col = 'cdr3a'
-        self.cdr3b_col = 'cdr3b'
-        self.va_col = 'va'
-        self.vb_col = 'vb'
+        self.cdr3a_col = cdr3a_col
+        self.cdr3b_col = cdr3b_col 
+        self.va_col = va_col
+        self.vb_col = vb_col 
+        self.kbest = 10
         self.target_length = 29
         
         self.params_vec = self.load_params_vec()
@@ -102,11 +107,43 @@ class TCRgpu:
            return seq[:target_length]
         else:
            total_padding = target_length - seq_length
-           first_half  = seq[:seq_length // 2]
-           second_half = seq[seq_length // 2:]
+           #tcrdist3_center = (seq_length // 2) + 1 # I DID THIS TO MAKE CUT POINT MORE SIMILAR TO TCRDIST3, but it led to more discordant results
+           #tcrdist3_center = (seq_length +1) // 2
+           tcrdist3_center = (seq_length) // 2
+           first_half  = seq[:tcrdist3_center]
+           second_half = seq[tcrdist3_center:]
            return first_half + ['_'] * total_padding + second_half
 
+    def encode_vb_only(self, tcrs = None):
+        if tcrs is None:
+            tcrs = self.tcrs
+        encoded = np.column_stack([np.vectorize(self.params_vec.get)(tcrs[self.vb_col])])
+        return encoded 
 
+    def encode_va_only(self, tcrs = None):
+        if tcrs is None:
+            tcrs = self.tcrs
+        encoded = np.column_stack([np.vectorize(self.params_vec.get)(tcrs[self.va_col])])
+        return encoded 
+
+    def encode_cdr3b_only(self, tcrs = None):
+        cdr3bmat = np.array([self.pad_center(seq=list(seq), target_length=self.target_length ) for seq in tcrs[self.cdr3b_col]])
+        cdr3bmatint = np.vectorize(self.params_vec.get)(cdr3bmat)
+        cols_to_use = slice(3, -2) #truncate CDR3s
+        if tcrs is None:
+            tcrs = self.tcrs
+        encoded = np.column_stack([cdr3bmatint[:,cols_to_use]])
+        return encoded 
+
+    def encode_cdr3a_only(self, tcrs = None):
+        cdr3amat = np.array([self.pad_center(seq=list(seq), target_length=self.target_length ) for seq in tcrs[self.cdr3a_col]])
+        cdr3amatint = np.vectorize(self.params_vec.get)(cdr3amat)
+        cols_to_use = slice(3, -2) #truncate CDR3s
+        if tcrs is None:
+            tcrs = self.tcrs
+        encoded = np.column_stack([cdr3amatint[:,cols_to_use]])
+        return encoded 
+        
     def encode_tcrs_b(self, tcrs = None):
             """
             Encode TCR sequences (BETA ONLY) using the parameters vector.
@@ -132,6 +169,7 @@ class TCRgpu:
             cols_to_use = slice(3, -2) #truncate CDR3s
             encoded = np.column_stack([
                 np.vectorize(self.params_vec.get)(tcrs[self.vb_col]),
+                #cdr3bmatint[:,]
                 cdr3bmatint[:,cols_to_use]
             ])
             self.encoded = encoded
@@ -200,7 +238,77 @@ class TCRgpu:
         self.encoded = encoded
         return encoded
 
-    def compute(self, encoded1= None, encoded2=None, mode = None, sort = True):
+    def compute(self, encoded1= None, encoded2=None, mode = None, max_k = 10, sort = True):
+        """
+        Compute the nearest neighbors for the TCR sequences.
+
+        Parameters:
+        -----------
+        mode : str, optional
+            Mode of computation, must be one of 'apple_silicon', 'cuda', or 'cpu'. Default is None, which uses self.mode.
+        sort : bool, optional
+            Whether to sort the results. Default is True.
+
+        Returns:
+        --------
+        tuple
+            Tuple containing two ndarrays: indices of the nearest neighbors and their distances.
+        """
+        # TODO ADD calculate_chunk_size() to ensure chunksize is appropriate
+        self.kbest = max_k
+
+        if mode is None:
+            mode = self.mode
+        if mode == "cpu":
+            import numpy as mx
+        elif mode == "cuda":
+            import cupy as mx 
+            self.submat = mx.array(self.submat)
+        elif mode == "apple_silicon":
+            import mlx.core as mx #use this for apple silicon
+        else:
+            raise ValueError("Mode must be in {modes}")
+
+        if encoded1 is None:
+            encoded1 = self.encoded
+        if encoded2 is None:
+            encoded2 = self.encoded
+
+        tcrs1=mx.array(encoded1).astype(mx.uint8)    
+        tcrs2=mx.array(encoded2).astype(mx.uint8)
+        
+        start_time = time.time()
+        result=mx.zeros((tcrs1.shape[0],self.kbest),dtype=mx.uint32) #initialize result array for indices
+        result_dist = mx.zeros((tcrs1.shape[0],self.kbest),dtype=mx.uint32) 
+
+        for ch in tqdm(range(0, tcrs1.shape[0], self.chunk_size)): #we process in chunks across tcr1 to not run out of memory
+            chunk_end = min(ch + self.chunk_size, tcrs1.shape[0])
+            row_range = slice(ch, chunk_end)
+            
+            # KMB: THIS TO GET DISTANCES BACK
+            dists = mx.sum(self.submat[tcrs1[row_range, None, :], tcrs2[ None,:, :]],axis=2)
+            
+            partitioned_indices = mx.argpartition(dists, kth =self.kbest, axis=1)
+            # Get the indices of the smallest k elements in each row
+            smallest_k_indices  = partitioned_indices[:,:self.kbest]
+            # Retrieve the values from arr_2d corresponding to smallest_k_indices
+            smallest_k_values   = dists[mx.arange(dists.shape[0])[:, mx.newaxis], smallest_k_indices]
+            # Sort both smallest_k_indices and smallest_k_values based on values in smallest_k_values
+            sorted_indices      = [mx.argsort(smallest_k_values, axis=1)]
+            sorted_orig_indices      = smallest_k_indices[mx.arange(dists.shape[0])[:, mx.newaxis], sorted_indices ]
+            sorted_smallest_k_values = mx.sort(smallest_k_values, axis=1)
+
+            result[row_range,:]= sorted_orig_indices
+            result_dist[row_range,:]= sorted_smallest_k_values
+
+        end_time = time.time()
+        print(f"MODE: {mode} -- {end_time - start_time:.6f} seconds") 
+        self.result = result
+        self.result_dist = result_dist
+        return result, result_dist
+
+
+    def compute_csr(self, encoded1= None, encoded2=None, mode = None, max_k = None, max_dist = None):
         """
         Compute the nearest neighbors for the TCR sequences.
 
@@ -238,38 +346,54 @@ class TCRgpu:
         tcrs1=mx.array(encoded1).astype(mx.uint8)    
         tcrs2=mx.array(encoded2).astype(mx.uint8)
         
+        nrow = tcrs1.shape[0]
+        ncol = tcrs2.shape[0]
+        
         start_time = time.time()
-        result=mx.zeros((tcrs1.shape[0],self.kbest),dtype=mx.uint32) #initialize result array for indices
-        result_dist = mx.zeros((tcrs1.shape[0],self.kbest),dtype=mx.uint32) 
-
+        dok_mat = dok_matrix((nrow, ncol), dtype = 'int16')
         for ch in tqdm(range(0, tcrs1.shape[0], self.chunk_size)): #we process in chunks across tcr1 to not run out of memory
             chunk_end = min(ch + self.chunk_size, tcrs1.shape[0])
             row_range = slice(ch, chunk_end)
+
             
-            # KMB: THIS TO GET DISTANCES BACK, WHICH WILL LIKELY BE USEFUL
             dists = mx.sum(self.submat[tcrs1[row_range, None, :], tcrs2[ None,:, :]],axis=2)
             
-            partitioned_indices = mx.argpartition(dists, kth =self.kbest, axis=1)
-            # Get the indices of the smallest k elements in each row
-            smallest_k_indices  = partitioned_indices[:,:self.kbest]
-            # Retrieve the values from arr_2d corresponding to smallest_k_indices
-            smallest_k_values   = dists[mx.arange(dists.shape[0])[:, mx.newaxis], smallest_k_indices]
-            # Sort both smallest_k_indices and smallest_k_values based on values in smallest_k_values
-            sorted_indices      = [mx.argsort(smallest_k_values, axis=1)]
-            sorted_orig_indices      = smallest_k_indices[mx.arange(dists.shape[0])[:, mx.newaxis], sorted_indices ]
-            sorted_smallest_k_values = mx.sort(smallest_k_values, axis=1)
+            # map i (global row indice) to ix (index in the chunk)
+            map_ix_to_i = {ix:i for ix,i in enumerate(range(ch, chunk_end))}
+            
 
-            result[row_range,:]= sorted_orig_indices
-            result_dist[row_range,:]= sorted_smallest_k_values
+            if max_dist is not None:
+                ixs, js = np.nonzero(dists <= max_dist)
+                orig_indices = [map_ix_to_i.get(ix) for ix in ixs]
+                for ix,j in zip(ixs, js):
+                    dok_mat[map_ix_to_i.get(ix),j] = max(1, dists[ix,j])
 
+            elif max_k is not None:
+                partitioned_indices = mx.argpartition(dists, kth =max_k, axis=1)
+                # Get the indices of the smallest k elements in each row
+                smallest_k_indices  = partitioned_indices[:,:max_k]
+                # Retrieve the values from arr_2d corresponding to smallest_k_indices
+                smallest_k_values   = dists[mx.arange(dists.shape[0])[:, mx.newaxis], smallest_k_indices]
+                # Sort both smallest_k_indices and smallest_k_values based on values in smallest_k_values
+                sorted_indices      = [mx.argsort(smallest_k_values, axis=1)]
+                sorted_orig_indices      = smallest_k_indices[mx.arange(dists.shape[0])[:, mx.newaxis], sorted_indices ]
+                sorted_smallest_k_values = mx.sort(smallest_k_values, axis=1)
+                for ix , i in enumerate(range(ch, chunk_end)):
+                    #import pdb; pdb.set_trace()
+                    for j in sorted_orig_indices[0,ix,:]:
+                        dok_mat[i, j] = max(1,dists[ix, j])
+            else:
+                for ix , i in enumerate(range(ch, chunk_end)):
+                    #import pdb; pdb.set_trace()
+                    for j in range(ncol):
+                        dok_mat[i, j] = dists[ix, j]
+
+        dok_mat = dok_mat.tocsr()
         end_time = time.time()
         print(f"MODE: {mode} -- {end_time - start_time:.6f} seconds") 
-        self.result = result
-        self.result_dist = result_dist
-        return result, result_dist
+        return dok_mat
 
-
-    def compute_full_(self, encoded1= None, encoded2=None, mode = None):
+    def compute_array(self, encoded1= None, encoded2=None, mode = None):
         if mode is None:
             mode = self.mode
         if mode == "cpu":
@@ -291,8 +415,28 @@ class TCRgpu:
         tcrs2=mx.array(encoded2).astype(mx.uint8)
         
         start_time = time.time()
-        dists = mx.sum(self.submat[tcrs1[row_range, None, :], tcrs2[ None,:, :]],axis=2)
+        dists = mx.sum(self.submat[tcrs1[:, None, :], tcrs2[ None,:, :]],axis=2)
+        end_time = time.time()
+        print(f"Array computed without chunks {mode} -- {end_time - start_time:.6f} seconds") 
         return dists
+
+
+    def test_only_(self, a, b, chain = 'b'):
+        """
+        THIS IS FOR TESTING ONLY
+        tg.test_only(
+            a = pd.DataFrame({'cdr3b':['CASAAAGF'],'vb':['TRBV9*01']}), 
+            b = pd.DataFrame({'cdr3b':['CASAAAGF'],'vb':['TRBV9*01']}))
+
+        tg.test_only(
+            a = pd.DataFrame({'cdr3b':['CASAAAGF'],'vb':['TRBV9*01']}), 
+            b = pd.DataFrame({'cdr3b':['CASAGGAGF'],'vb':['TRBV9*01']}))
+        """
+        if chain == "b":
+            encoded_seq  = self.encode_tcrs_b(a)
+            encoded_seq2 = self.encode_tcrs_b(b)
+            dist = np.sum(self.submat[encoded_seq[:, None, :], encoded_seq2[ None,:, :]],axis=2)
+        return dist
 
 
     def sanity_test_nn_seqs(self, i, tcrs = None, tcrs2= None, max_dist = 150, mode= None):
@@ -348,9 +492,10 @@ def calculate_chunk_size(i: int, max_size = 10000000) -> int:
     # Calculate the maximum chunk size
     chunk_size = max_size // i
     return chunk_size
-i = 1001
-chunk_size = calculate_chunk_size(i)
-print(f"For i = {i}, the chunk size is {chunk_size}.")
+
+#i = 1001
+#chunk_size = calculate_chunk_size(i)
+#print(f"For i = {i}, the chunk size is {chunk_size}.")
 
 def sort_out_k(dists, k= 10):
     partitioned_indices = np.argpartition(dists, kth =k, axis=1)
