@@ -9,6 +9,6 @@ setup(
     ],
     include_package_data=True,
      package_data={
-        'tcrdistgpu': ['data/*.tsv'.'data/*.csv'],
+        'tcrdistgpu': ['data/*.tsv','data/*.csv'],
     },
 )
