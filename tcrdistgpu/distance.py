@@ -282,13 +282,13 @@ class TCRgpu:
 
                 dists = smallest_k_values
 
-            if mode == "cuda":
-                dists = dists.get()
+            # if mode == "cuda":
+            #     dists = dists.get()
 
             if pmf:
-                hist_matrix = np.apply_along_axis(compute_pmf, 1, dists, bins)   
+                hist_matrix = mx.apply_along_axis(compute_pmf, 1, dists, bins)   
             else:
-                hist_matrix = np.apply_along_axis(compute_hist, 1, dists, bins)        
+                hist_matrix = mx.apply_along_axis(compute_hist, 1, dists, bins)        
 
             result[row_range,:]= hist_matrix
 
