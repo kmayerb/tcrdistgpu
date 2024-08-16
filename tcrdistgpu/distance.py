@@ -44,7 +44,8 @@ class TCRgpu:
             cdr3a_col = 'cdr3a',
             cdr3b_col = 'cdr3b',
             va_col = 'va',
-            vb_col = 'vb'):
+            vb_col = 'vb',
+            kbest = 20):
         """
         Initialize the TCRgpu object.
 
@@ -70,7 +71,7 @@ class TCRgpu:
         self.cdr3b_col = cdr3b_col 
         self.va_col = va_col
         self.vb_col = vb_col 
-        self.kbest = 10
+        self.kbest = kbest
         self.target_length = 29
         
         self.params_vec = self.load_params_vec()
@@ -238,7 +239,7 @@ class TCRgpu:
         self.encoded = encoded
         return encoded
 
-    def compute_distribution(self, encoded1= None, encoded2=None, mode = None, max_k = None, pmf = False, bins=np.linspace(0, 500, 51)):
+    def compute_distribution(self, encoded1= None, encoded2=None, mode = None, max_k = None, pmf = False, bins=np.arange(0, 401, 12)):
 
         if mode is None:
             mode = self.mode
@@ -296,7 +297,7 @@ class TCRgpu:
         print(f"MODE: {mode} -- {end_time - start_time:.6f} seconds") 
         return result
 
-    def compute(self, encoded1= None, encoded2=None, mode = None, max_k = 10, sort = True):
+    def compute(self, encoded1= None, encoded2=None, mode = None, max_k = 20, sort = True):
         """
         Compute the nearest neighbors for the TCR sequences.
 
@@ -313,7 +314,8 @@ class TCRgpu:
             Tuple containing two ndarrays: indices of the nearest neighbors and their distances.
         """
         # TODO ADD calculate_chunk_size() to ensure chunksize is appropriate
-        self.kbest = max_k
+        if max_k is not None:
+            self.kbest = max_k
 
         if mode is None:
             mode = self.mode

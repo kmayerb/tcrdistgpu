@@ -16,7 +16,11 @@ def knn_tcr(tcr_train,
             label_test = None,
             chain = "a", mode = "cpu", kbest = 20,
             krange = range(1,21,2),
-            adjust_class_weights = True):
+            adjust_class_weights = True,
+            cdr3b_col = 'cdr3b',
+            cdr3a_col = 'cdr3a',
+            vb_col = 'vb',
+            va_col = 'va'):
 
   acc_store = list()
   auc_store = list()
@@ -29,7 +33,11 @@ def knn_tcr(tcr_train,
   tg = TCRgpu(tcrs = tcr_train,
               tcrs2 = tcr_test,
               mode = mode,
-              kbest = kbest)
+              kbest = kbest,
+              cdr3b_col = cdr3b_col,
+              cdr3a_col = cdr3a_col ,
+              vb_col = vb_col,
+              va_col = va_col)
 
   print(f"--- Encoding TCRs as vectors")
   if chain == "a":
@@ -63,6 +71,7 @@ def knn_tcr(tcr_train,
   print(f"--- Performing kNN Classification")
   total_k = len([x for x in krange])
   for k in tqdm(krange, total = total_k):
+    #print(k)
     k_store.append(k)
 
     # Compute weights using distances and labels
@@ -82,6 +91,7 @@ def knn_tcr(tcr_train,
     weighted_votes = np.zeros((distances.shape[0], len(np.unique(labels))))
     for i in range(distances.shape[0]):
         for j in range(k):
+            #import pdb; pdb.set_trace()
             label = labels[indices[i, j]]
             weighted_votes[i, label] += weights[i, j]
 
