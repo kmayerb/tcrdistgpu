@@ -238,6 +238,63 @@ class TCRgpu:
         self.encoded = encoded
         return encoded
 
+    def compute_distribution(self, encoded1= None, encoded2=None, mode = None, max_k = None, pmf = False, bins=np.linspace(0, 500, 51)):
+
+        if mode is None:
+            mode = self.mode
+        if mode == "cpu":
+            import numpy as mx
+        elif mode == "cuda":
+            import cupy as mx 
+            self.submat = mx.array(self.submat)
+        elif mode == "apple_silicon":
+            import mlx.core as mx #use this for apple silicon
+        else:
+            raise ValueError("Mode must be in {modes}")
+
+        if encoded1 is None:
+            encoded1 = self.encoded
+        if encoded2 is None:
+            encoded2 = self.encoded
+
+        tcrs1=mx.array(encoded1).astype(mx.uint8)    
+        tcrs2=mx.array(encoded2).astype(mx.uint8)
+        
+        start_time = time.time()
+        if pmf:
+            result=mx.zeros((tcrs1.shape[0],len(bins)-1),dtype=mx.float32) #initialize result array for indices
+        else:
+            result=mx.zeros((tcrs1.shape[0],len(bins)-1),dtype=mx.uint32) #initialize result array for indices
+
+        for ch in tqdm(range(0, tcrs1.shape[0], self.chunk_size)): #we process in chunks across tcr1 to not run out of memory
+            chunk_end = min(ch + self.chunk_size, tcrs1.shape[0])
+            row_range = slice(ch, chunk_end)
+            
+            # KMB: THIS TO GET DISTANCES BACK
+            dists = mx.sum(self.submat[tcrs1[row_range, None, :], tcrs2[ None,:, :]],axis=2)
+            if mode == "cuda":
+                dists = dists.get()
+
+            if max_k is not None:
+                partitioned_indices = mx.argpartition(dists, kth = max_k, axis=1)
+                # Get the indices of the smallest k elements in each row
+                smallest_k_indices  = partitioned_indices[:,:max_k]
+                # Retrieve the values from arr_2d corresponding to smallest_k_indices
+                smallest_k_values   = dists[mx.arange(dists.shape[0])[:, mx.newaxis], smallest_k_indices]
+
+                dists = smallest_k_values
+            
+            if pmf:
+                hist_matrix = np.apply_along_axis(compute_pmf, 1, dists, bins)   
+            else:
+                hist_matrix = np.apply_along_axis(compute_hist, 1, dists, bins)        
+
+            result[row_range,:]= hist_matrix
+
+        end_time = time.time()
+        print(f"MODE: {mode} -- {end_time - start_time:.6f} seconds") 
+        return result
+
     def compute(self, encoded1= None, encoded2=None, mode = None, max_k = 10, sort = True):
         """
         Compute the nearest neighbors for the TCR sequences.
@@ -492,6 +549,15 @@ class TCRgpu:
         for ix, j in enumerate(idx[0:max_index]):
             seq_j = tcrs2.iloc[j,:].to_list()
             print(i,j,dists[ix],seq_i, seq_j)
+
+
+def compute_pmf(row, bins=np.linspace(0, 500, 51)):
+    counts, _ = np.histogram(row, bins=np.linspace(0, 500, 51))
+    return counts / np.sum(counts)
+
+def compute_hist(row, bins=np.linspace(0, 500, 51)):
+    counts, _ = np.histogram(row, bins=np.linspace(0, 500, 51))
+    return counts 
 
 
 def calculate_chunk_size(i: int, max_size = 10000000) -> int:
