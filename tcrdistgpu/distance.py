@@ -552,11 +552,11 @@ class TCRgpu:
 
 
 def compute_pmf(row, bins=np.linspace(0, 500, 51)):
-    counts, _ = np.histogram(row, bins=np.linspace(0, 500, 51))
+    counts, _ = np.histogram(row, bins=bins)
     return counts / np.sum(counts)
 
 def compute_hist(row, bins=np.linspace(0, 500, 51)):
-    counts, _ = np.histogram(row, bins=np.linspace(0, 500, 51))
+    counts, _ = np.histogram(row, bins=bins)
     return counts 
 
 
