@@ -430,16 +430,15 @@ class TCRgpu:
                 if mode == "cuda":
                     dists = dists.get()
                 ixs, js = np.nonzero(dists <= max_dist)
+
                 orig_indices = [map_ix_to_i.get(ix) for ix in ixs]
                 for ix,j in zip(ixs, js):
-                        if mode == "cuda":
-                            dok_mat[map_ix_to_i.get(ix),j] = max(1, dists[ix,j].get())
-                        else:
-                            dok_mat[map_ix_to_i.get(ix),j] = max(1, dists[ix,j])
+                    dok_mat[map_ix_to_i.get(ix),j] = max(1, dists[ix,j])
 
                     
 
             elif max_k is not None:
+
                 partitioned_indices = mx.argpartition(dists, kth =max_k, axis=1)
                 # Get the indices of the smallest k elements in each row
                 smallest_k_indices  = partitioned_indices[:,:max_k]
@@ -450,13 +449,13 @@ class TCRgpu:
                 sorted_orig_indices      = smallest_k_indices[mx.arange(dists.shape[0])[:, mx.newaxis], sorted_indices ]
                 sorted_smallest_k_values = mx.sort(smallest_k_values, axis=1)
                 
+                if mode == "cuda":
+                    dists = dists.get()
+                    sorted_orig_indices = sorted_orig_indices.get()
                 for ix , i in enumerate(range(ch, chunk_end)):
                     #import pdb; pdb.set_trace()
                     for j in sorted_orig_indices[0,ix,:]:
-                        if mode == "cuda":
-                            dok_mat[i, j] = max(1,dists[ix, j].get())
-                        else:
-                            dok_mat[i, j] = max(1,dists[ix, j])
+                        dok_mat[i, j] = max(1,dists[ix, j])
 
             else:
                 for ix , i in enumerate(range(ch, chunk_end)):
