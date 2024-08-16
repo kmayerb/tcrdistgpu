@@ -368,6 +368,7 @@ class TCRgpu:
             
 
             if max_dist is not None:
+
                 ixs, js = np.nonzero(dists <= max_dist)
                 orig_indices = [map_ix_to_i.get(ix) for ix in ixs]
                 for ix,j in zip(ixs, js):

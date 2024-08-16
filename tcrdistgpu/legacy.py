@@ -196,7 +196,7 @@ def compute_legacy_sparse_multicpu(v1, seqs1, v2, seqs2, submat , mode ='cpu', m
     chunked_v1    = [v1[x] for x in chunk_idx]
     import parmap
     import scipy.sparse as sp
-    csr_matrices= parmap.starmap(_compute_legacy_chunk, list(zip(chunked_v1, chunked_seqs1)), v2 = v2,  seqs2 = seqs2, submat= submat, 
+    csr_matrices= parmap.starmap(compute_legacy_chunk, list(zip(chunked_v1, chunked_seqs1)), v2 = v2,  seqs2 = seqs2, submat= submat, 
         max_k = max_k , max_dist = max_dist,
         pm_pbar = True, pm_processes=cpus)
     csr = sp.vstack(csr_matrices)
