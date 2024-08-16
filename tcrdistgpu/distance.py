@@ -272,8 +272,6 @@ class TCRgpu:
             
             # KMB: THIS TO GET DISTANCES BACK
             dists = mx.sum(self.submat[tcrs1[row_range, None, :], tcrs2[ None,:, :]],axis=2)
-            if mode == "cuda":
-                dists = dists.get()
 
             if max_k is not None:
                 partitioned_indices = mx.argpartition(dists, kth = max_k, axis=1)
@@ -283,7 +281,10 @@ class TCRgpu:
                 smallest_k_values   = dists[mx.arange(dists.shape[0])[:, mx.newaxis], smallest_k_indices]
 
                 dists = smallest_k_values
-            
+
+            if mode == "cuda":
+                dists = dists.get()
+
             if pmf:
                 hist_matrix = np.apply_along_axis(compute_pmf, 1, dists, bins)   
             else:
