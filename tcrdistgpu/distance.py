@@ -239,7 +239,7 @@ class TCRgpu:
         self.encoded = encoded
         return encoded
 
-    def compute_distribution(self, encoded1= None, encoded2=None, mode = None, max_k = None, pmf = False, bins=np.arange(0, 401, 12)):
+    def compute_distribution(self, encoded1= None, encoded2=None, mode = None, max_k = None, pmf = False, ignore_self = False, bins=np.arange(0, 401, 12)):
 
         if mode is None:
             mode = self.mode
@@ -287,12 +287,14 @@ class TCRgpu:
             #     dists = dists.get()
 
             if pmf:
-                if mx.all(tcrs1 == tcrs2):
+                if ignore_self:
+
                     hist_matrix = mx.apply_along_axis(compute_pmf_ignore_self, 1, dists, bins) 
                 else:
                     hist_matrix = mx.apply_along_axis(compute_pmf, 1, dists, bins)   
             else:
-                if mx.all(tcrs1 == tcrs2):
+                if ignore_self:
+                    
                     hist_matrix = mx.apply_along_axis(compute_hist_ignore_self, 1, dists, bins) 
                 else:
                     hist_matrix = mx.apply_along_axis(compute_hist, 1, dists, bins)   
