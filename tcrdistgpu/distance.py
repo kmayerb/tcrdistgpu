@@ -287,9 +287,15 @@ class TCRgpu:
             #     dists = dists.get()
 
             if pmf:
-                hist_matrix = mx.apply_along_axis(compute_pmf, 1, dists, bins)   
+                if encoded1 == encoded2:
+                    hist_matrix = mx.apply_along_axis(compute_pmf_ignore_self, 1, dists, bins) 
+                else:
+                    hist_matrix = mx.apply_along_axis(compute_pmf, 1, dists, bins)   
             else:
-                hist_matrix = mx.apply_along_axis(compute_hist, 1, dists, bins)        
+                if encoded1 == encoded2:
+                    hist_matrix = mx.apply_along_axis(compute_hist_ignore_self, 1, dists, bins) 
+                else:
+                    hist_matrix = mx.apply_along_axis(compute_hist, 1, dists, bins)   
 
             result[row_range,:]= hist_matrix
 
@@ -567,10 +573,21 @@ def compute_pmf(row, bins=np.linspace(0, 500, 51)):
     counts, _ = np.histogram(row, bins=bins)
     return counts / np.sum(counts)
 
+def compute_pmf_ignore_self(row, bins=np.linspace(0, 500, 51)):
+    min_index = np.argmin(row)
+    row= np.delete(row, min_index)
+    counts, _ = np.histogram(row, bins=bins)
+    return counts / np.sum(counts)
+
 def compute_hist(row, bins=np.linspace(0, 500, 51)):
     counts, _ = np.histogram(row, bins=bins)
     return counts 
 
+def compute_hist_ignore_self(row, bins=np.linspace(0, 500, 51)):
+    min_index = np.argmin(row)
+    row= np.delete(row, min_index)
+    counts, _ = np.histogram(row, bins=bins)
+    return counts 
 
 def calculate_chunk_size(i: int, max_size = 10000000) -> int:
     # Calculate the maximum chunk size
