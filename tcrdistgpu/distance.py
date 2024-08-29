@@ -287,12 +287,12 @@ class TCRgpu:
             #     dists = dists.get()
 
             if pmf:
-                if mx.all(encoded1 == encoded2):
+                if mx.all(tcrs1 == tcrs2):
                     hist_matrix = mx.apply_along_axis(compute_pmf_ignore_self, 1, dists, bins) 
                 else:
                     hist_matrix = mx.apply_along_axis(compute_pmf, 1, dists, bins)   
             else:
-                if mx.all(encoded1 == encoded2):
+                if mx.all(tcrs1 == tcrs2):
                     hist_matrix = mx.apply_along_axis(compute_hist_ignore_self, 1, dists, bins) 
                 else:
                     hist_matrix = mx.apply_along_axis(compute_hist, 1, dists, bins)   
