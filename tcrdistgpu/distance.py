@@ -127,25 +127,25 @@ class TCRgpu:
         encoded = np.column_stack([np.vectorize(self.params_vec.get)(tcrs[self.va_col])])
         return encoded 
 
-    def encode_cdr3b_only(self, tcrs = None):
+    def encode_cdr3b_only(self, tcrs = None, cols_to_use = slice(3, -2)):
         cdr3bmat = np.array([self.pad_center(seq=list(seq), target_length=self.target_length ) for seq in tcrs[self.cdr3b_col]])
         cdr3bmatint = np.vectorize(self.params_vec.get)(cdr3bmat)
-        cols_to_use = slice(3, -2) #truncate CDR3s
+        #cols_to_use = slice(3, -2) #truncate CDR3s
         if tcrs is None:
             tcrs = self.tcrs
         encoded = np.column_stack([cdr3bmatint[:,cols_to_use]])
         return encoded 
 
-    def encode_cdr3a_only(self, tcrs = None):
+    def encode_cdr3a_only(self, tcrs = None, cols_to_use = slice(3, -2)):
         cdr3amat = np.array([self.pad_center(seq=list(seq), target_length=self.target_length ) for seq in tcrs[self.cdr3a_col]])
         cdr3amatint = np.vectorize(self.params_vec.get)(cdr3amat)
-        cols_to_use = slice(3, -2) #truncate CDR3s
+        #cols_to_use = slice(3, -2) #truncate CDR3s
         if tcrs is None:
             tcrs = self.tcrs
         encoded = np.column_stack([cdr3amatint[:,cols_to_use]])
         return encoded 
         
-    def encode_tcrs_b(self, tcrs = None):
+    def encode_tcrs_b(self, tcrs = None, cols_to_use = slice(3, -2)):
             """
             Encode TCR sequences (BETA ONLY) using the parameters vector.
 
@@ -167,7 +167,6 @@ class TCRgpu:
             cdr3bmatint = np.vectorize(self.params_vec.get)(cdr3bmat)
             #self.cdr3amatint = cdr3amatint
             self.cdr3bmatint = cdr3bmatint
-            cols_to_use = slice(3, -2) #truncate CDR3s
             encoded = np.column_stack([
                 np.vectorize(self.params_vec.get)(tcrs[self.vb_col]),
                 #cdr3bmatint[:,]
@@ -176,7 +175,7 @@ class TCRgpu:
             self.encoded = encoded
             return encoded
 
-    def encode_tcrs_a(self, tcrs = None):
+    def encode_tcrs_a(self, tcrs = None, cols_to_use = slice(3, -2)):
             """
             Encode TCR sequences (BETA ONLY) using the parameters vector.
 
@@ -198,7 +197,7 @@ class TCRgpu:
             cdr3amatint = np.vectorize(self.params_vec.get)(cdr3amat)
             #self.cdr3amatint = cdr3amatint
             self.cdr3amatint = cdr3amatint
-            cols_to_use = slice(3, -2) #truncate CDR3s
+            #cols_to_use = slice(3, -2) #truncate CDR3s
             encoded = np.column_stack([
                 np.vectorize(self.params_vec.get)(tcrs[self.va_col]),
                 cdr3amatint[:,cols_to_use]
@@ -207,7 +206,7 @@ class TCRgpu:
             return encoded
 
 
-    def encode_tcrs(self, tcrs = None):
+    def encode_tcrs(self, tcrs = None, cols_to_use = slice(3, -2)):
         """
         Encode TCR sequences using the parameters vector.
 
@@ -229,7 +228,7 @@ class TCRgpu:
         cdr3bmatint = np.vectorize(self.params_vec.get)(cdr3bmat)
         self.cdr3amatint = cdr3amatint
         self.cdr3bmatint = cdr3bmatint
-        cols_to_use = slice(3, -2) #truncate CDR3s
+        #cols_to_use = slice(3, -2) #truncate CDR3s
         encoded = np.column_stack([
             np.vectorize(self.params_vec.get)(tcrs[self.va_col]),
             cdr3amatint[:,cols_to_use],
