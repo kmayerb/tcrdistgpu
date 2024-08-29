@@ -20,7 +20,8 @@ def knn_tcr(tcr_train,
             cdr3b_col = 'cdr3b',
             cdr3a_col = 'cdr3a',
             vb_col = 'vb',
-            va_col = 'va'):
+            va_col = 'va',
+            chunk_size =100):
 
   acc_store = list()
   auc_store = list()
@@ -37,7 +38,8 @@ def knn_tcr(tcr_train,
               cdr3b_col = cdr3b_col,
               cdr3a_col = cdr3a_col ,
               vb_col = vb_col,
-              va_col = va_col)
+              va_col = va_col, 
+              chunk_size = chunk_size)
 
   print(f"--- Encoding TCRs as vectors")
   if chain == "a":
@@ -57,13 +59,14 @@ def knn_tcr(tcr_train,
 
   if mode == "cuda":
     indices, distances = indices.get(), distances.get()
-  print(f"--- Converting to sparse matrix")
-  dok = dok_matrix((nrow, ncol), dtype=np.int16)
-  for i, jdx, in tqdm(enumerate(indices), total = nrow):
-    jdist = distances[i]
-    for j,d in zip(jdx,jdist):
-      dok[i,j] = max(1,d)
-  print(f"--- Completed sparse matrix {dok.shape}))")
+  
+  #print(f"--- Converting to sparse matrix")
+  # dok = dok_matrix((nrow, ncol), dtype=np.int16)
+  # for i, jdx, in tqdm(enumerate(indices), total = nrow):
+  #   jdist = distances[i]
+  #   for j,d in zip(jdx,jdist):
+  #     dok[i,j] = max(1,d)
+  # print(f"--- Completed sparse matrix {dok.shape}))")
 
   labels = label_train
   y_test = label_test
