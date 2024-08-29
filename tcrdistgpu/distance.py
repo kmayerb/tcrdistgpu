@@ -578,7 +578,7 @@ def compute_pmf_ignore_self(row, bins=np.linspace(0, 500, 51)):
     min_index = np.argmin(row)
     try:
         row= np.delete(row, min_index)
-    except TypeError
+    except TypeError:
         row = np.delete(row.get(), min_index)
     counts, _ = np.histogram(row, bins=bins)
     return counts / np.sum(counts)
@@ -591,7 +591,7 @@ def compute_hist_ignore_self(row, bins=np.linspace(0, 500, 51)):
     min_index = np.argmin(row)
     try:
         row= np.delete(row, min_index)
-    except TypeError
+    except TypeError:
         row = np.delete(row.get(), min_index)
     counts, _ = np.histogram(row, bins=bins)
     return counts 
