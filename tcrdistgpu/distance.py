@@ -238,6 +238,11 @@ class TCRgpu:
         self.encoded = encoded
         return encoded
 
+
+
+
+
+
     def compute_distribution(self, encoded1= None, encoded2=None, mode = None, max_k = None, pmf = False, ignore_self = False, bins=np.arange(0, 401, 12)):
 
         if mode is None:
@@ -373,6 +378,37 @@ class TCRgpu:
         self.result = result
         self.result_dist = result_dist
         return result, result_dist
+
+    def tcrdist_csr(self, data, data2=None, chain= "b", organism = "human", mode = None, max_k = None, max_dist = None):
+        """AUTOMATED"""
+        chain_names = {'a':'alpha chain','b':'beta chain','ab':'alpha-beta chains'}
+        if not chain in chain_names.keys():
+            raise ValueError
+        if chain == "a":
+            print(f"Encoding Data based on {chain_names.get(chain)} only")
+            e_data = self.encode_tcrs_a(data)
+        elif chain == "b":
+            print(f"Encoding Data based on {chain_names.get(chain)} only")
+            e_data = self.encode_tcrs_b(data)
+        elif chain == "ab":
+            print(f"Encoding Data based on {chain_names.get(chain)}")
+            e_data = self.encode_tcrs(data)
+        else:
+            raise ValueError
+        if data2 is not None:
+            if chain == "a":
+                e_data2 = self.encode_tcrs_a(data2)
+            elif chain == "b":
+                e_data2 = self.encode_tcrs_b(data2)
+            elif chain == "ab":
+                e_data2 = self.encode_tcrs(data2)
+            else:
+                raise ValueError
+        if data2 is not None:        
+            x = self.compute_csr(encoded1= e_data, encoded2= e_data2, mode = mode, max_k = max_k, max_dist = max_dist)
+        else:
+            x = self.compute_csr(encoded1= e_data, encoded2= e_data, mode = mode, max_k = max_k, max_dist = max_dist)
+        return(x)
 
 
     def compute_csr(self, encoded1= None, encoded2=None, mode = None, max_k = None, max_dist = None):
