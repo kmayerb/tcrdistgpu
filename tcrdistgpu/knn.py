@@ -44,10 +44,10 @@ def knn_tcr(tcr_train,
                 chunk_size = chunk_size)
   else:
     # Here we can input a precconfigured TCRgpu instance.
-    tg.tcrs = tcr_train,
-    tg.tcrs2 = tcr_test,
-    tg.mode = mode,
-    tg.kbest = kbest,
+    tg.tcrs = tcr_train
+    tg.tcrs2 = tcr_test
+    tg.mode = mode
+    tg.kbest = kbest
     #tg.cdr3b_col = cdr3b_col,
     #tg.cdr3a_col = cdr3a_col ,
     #tg.vb_col = vb_col,
