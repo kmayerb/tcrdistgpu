@@ -21,7 +21,8 @@ def knn_tcr(tcr_train,
             cdr3a_col = 'cdr3a',
             vb_col = 'vb',
             va_col = 'va',
-            chunk_size =100):
+            chunk_size =100, 
+            tg = None):
 
   acc_store = list()
   auc_store = list()
@@ -30,16 +31,28 @@ def knn_tcr(tcr_train,
 
   nrow = tcr_test.shape[0]
   ncol = tcr_train.shape[0]
-
-  tg = TCRgpu(tcrs = tcr_train,
-              tcrs2 = tcr_test,
-              mode = mode,
-              kbest = kbest,
-              cdr3b_col = cdr3b_col,
-              cdr3a_col = cdr3a_col ,
-              vb_col = vb_col,
-              va_col = va_col, 
-              chunk_size = chunk_size)
+  
+  if tg is None:
+    tg = TCRgpu(tcrs = tcr_train,
+                tcrs2 = tcr_test,
+                mode = mode,
+                kbest = kbest,
+                cdr3b_col = cdr3b_col,
+                cdr3a_col = cdr3a_col ,
+                vb_col = vb_col,
+                va_col = va_col, 
+                chunk_size = chunk_size)
+  else:
+    # Here we can input a precconfigured TCRgpu instance.
+    tg.tcrs = tcr_train,
+    tg.tcrs2 = tcr_test,
+    tg.mode = mode,
+    tg.kbest = kbest,
+    #tg.cdr3b_col = cdr3b_col,
+    #tg.cdr3a_col = cdr3a_col ,
+    #tg.vb_col = vb_col,
+    #tg.va_col = va_col, 
+    tg.chunk_size = chunk_size
 
   print(f"--- Encoding TCRs as vectors")
   if chain == "a":
