@@ -60,6 +60,7 @@ class TCRgpu:
         chunk_size : int, optional
             Size of chunks for processing. Default is 1000.
         """
+        print(current_dir)
         self.tcrs = tcrs
         self.tcrs2 = tcrs2
         
@@ -81,12 +82,73 @@ class TCRgpu:
         params_df = pd.read_csv(os.path.join(current_dir,"data/params_v2.tsv"), sep="\t", header=None, names=["feature", "value"])
         params_vec = dict(zip(params_df["feature"], params_df["value"]))
         return params_vec
+    
     def load_substitution_matrix(self):
         submat = np.array(np.loadtxt(os.path.join(current_dir,'data/TCRdist_matrix_mega.tsv'), delimiter='\t', dtype=np.int16))
         return submat
+    
+    def update_subsitution_matrix(self,df,dbtype = "float16"):
+        # USE THIS TO UPDATE A,A, subsitution penalties
+        # Assert d must have valid columns and rows
+        assert isinstance(df, pd.DataFrame), "<def> must be a pandas DataFrame"
+        # Assert d must have symetrical columns and row indices
+        assert (df.index == df.columns).all(), "input dataframe must contain"
+        # If param_vec doesn't have element, that raise error
+        assert np.all([self.params_vec.get(i) != None for i in df.index]), "All indices must match TCRgpu.param_vec keys"
+
+        df.index = [self.params_vec.get(i) for i in df.index]
+        df.columns = [self.params_vec.get(j) for j in df.columns]
+        sub_tuples = matrix_to_dict(matrix = df.values, headers = df.columns)
+        # reverse params
+        rev_params = {v:k for k,v in self.params_vec.items()}
+        s = list()
+        # update dbtype
+        self.submat = self.submat.astype(dbtype)
+        for tpl, value in sub_tuples.items():
+            i,j = tpl
+            self.submat[(i,j)] = value
+
+    def update_aa_submat_preset(self, preset= 'ucl',
+            range_factor = 2,
+            center_penalty = 4,
+            cdr3_factor =3):
+        print(current_dir)
+        AA = ["A", "R", "N", "D", "C", 
+                "E", "Q", "G", "H", "I", 
+                "L", "K", "M", "F", "P", 
+                "S", "T", "W", "Y", "V"]
+        if preset == "hamming":
+            df = pd.DataFrame(np.zeros((20,20)), columns = AA, index = AA) + 1
+            np.fill_diagonal(df.values, 0)
+            self.update_subsitution_matrix(df = cdr3_factor*df, dbtype = 'int16')
+        if preset == "toposim":
+            #  Toposim is an a negative matrix we scale and center around 4 reduce range with factor 
+            df = pd.read_csv(os.path.join(current_dir, 'data','toposim.tsv'), sep = "\t", index_col = 0)
+            np.fill_diagonal(df.values, 0)
+            df[df> 0] = -1
+            df = -1 * df
+            mean_value= np.mean(df.values[df.values != 0])
+            df = ((df-mean_value)/range_factor)+center_penalty 
+            np.fill_diagonal(df.values, 0)
+            self.update_subsitution_matrix(df = cdr3_factor*df, dbtype = 'float16')
+        if preset == "ucl":
+            df = pd.read_csv(os.path.join(current_dir, 'data','pyo_mltcrdist_submatrix.tsv'), sep = "\t", index_col = 0)
+            df = df.loc[AA,AA]
+            self.update_subsitution_matrix(df = cdr3_factor*df, dbtype = 'float16')
+        if preset == "tcrblossuma":
+            df = pd.read_csv(os.path.join(current_dir, 'data','tcrBLOSSUMa.tsv'), sep = "\t", index_col = 0)
+            df = df.loc[AA,AA]
+            self.update_subsitution_matrix(df = cdr3_factor*df, dbtype = 'int16')
+            #self.update_subsitution_matrix(df = 3*df, dbytpe = 'float16')
+        if preset == "tcrblossumb":
+            df = pd.read_csv(os.path.join(current_dir, 'data','tcrBLOSSUMb.tsv'), sep = "\t", index_col = 0)
+            df = df.loc[AA,AA]
+            self.update_subsitution_matrix(df = cdr3_factor*df, dbtype = 'int16')
+
     def load_tst_tcr(self):
         tst_tcr = pd.read_csv(os.path.join(current_dir,"data/tmp_tcr.tsv"), sep="\t")
         return tst_tcr
+
     def pad_center(self, seq, target_length): # function to pad center with gaps until target length
         """
         Pad a sequence to the target length by adding gaps in the center.
@@ -605,6 +667,21 @@ class TCRgpu:
             seq_j = tcrs2.iloc[j,:].to_list()
             print(i,j,dists[ix],seq_i, seq_j)
 
+
+
+def matrix_to_dict(matrix, headers):
+    """
+    Convert a matrix to a dictionary with tuple keys.
+
+    :param matrix: A 2D list representing the matrix.
+    :param headers: A list of characters representing the headers of the matrix.
+    :return: A dictionary with tuple keys and matrix values.
+    """
+    result = {}
+    for i, row in enumerate(matrix):
+        for j, value in enumerate(row):
+            result[(headers[i], headers[j])] = value
+    return result
 
 def compute_pmf(row, bins=np.linspace(0, 500, 51)):
     counts, _ = np.histogram(row, bins=bins)
