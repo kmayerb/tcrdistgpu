@@ -502,7 +502,7 @@ class TCRgpu:
     
         start_time = time.time()
     
-        for ch in range(0, nrow, self.chunk_size):
+        for ch in tqdm(range(0, nrow, self.chunk_size)):
             chunk_end = min(ch + self.chunk_size, nrow)
             row_range = slice(ch, chunk_end)
     
