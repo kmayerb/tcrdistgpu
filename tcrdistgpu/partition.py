@@ -12,9 +12,9 @@ def run_louvain(G, resolution = 1, random_state =1 ):
 	centroids = None
 	return pt_to_node, node_to_pt, centroids
 
-def run_clump(G, cpus = 2):
+def run_clump(G, cpus = 2, min_degree = 0):
 	from tcrdistgpu.clump import clump_graph_expensive_by_component_parmap
-	cg_exp1 = clump_graph_expensive_by_component_parmap(G, cpus = cpus, min_degree = 1)
+	cg_exp1 = clump_graph_expensive_by_component_parmap(G, cpus = cpus, min_degree = min_degree)
 	node_to_cluster = dict()
 	for k,v in cg_exp1.items():
 		for i in v:
@@ -35,12 +35,14 @@ def run_leiden(G ,mode = "ModularityVertexPartition", **kwargs):
 		partition = leidenalg.find_partition(g, leidenalg.SurpriseVertexPartition, **kwargs)
 	else:
 		partition = leidenalg.find_partition(g, leidenalg.CPMVertexPartition, **kwargs)
+	
 	# convert to {node: cluster_id} dictionary
 	node_to_cluster = {}
 	for cluster_id, cluster_nodes in enumerate(partition):
 			for node in cluster_nodes:
 					original_node = reverse_mapping[node]
 					node_to_cluster[original_node] = cluster_id
+	
 	pt_to_node, node_to_pt = get_pt(node_to_cluster)
 	centroids = None
 	return pt_to_node, node_to_pt, centroids

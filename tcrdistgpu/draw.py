@@ -3,6 +3,10 @@ import matplotlib.colors as mcolors
 from matplotlib.patches import Patch
 from matplotlib.colors import ListedColormap
 # Requires pygraphviz, libgraphviz-dev
+import networkx as nx 
+import pandas as pd 
+import numpy as np 
+
 
 def draw_categories(
     G,
