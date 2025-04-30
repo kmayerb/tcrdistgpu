@@ -50,23 +50,12 @@ def _list_to_regex_component(l, max_ambiguity = 3):
 	return s
 
 
-def _index_to_matrix(ind, clone_df, pwmat = None, col = 'cdr3_b_aa', centroid = None ):
-	"""
-	Example
-	-------
-
-
-	"""
-	dfnode   = clone_df.iloc[ind,].copy()
-
-	seqs = dfnode[col].to_list()
-	if centroid is None:
-		pwnode   = pwmat[ind,:][:,ind].copy()
-		iloc_idx = pwnode.sum(axis = 0).argmin() 
-		centroid = dfnode[col].to_list()[iloc_idx]
-	
-	matrix, stats = compute_pal_motif(seqs = seqs, centroid = centroid)
-	return matrix
+def _index_to_matrix(ind, data, col = 'cdr3_b_aa', centroid_i = None):
+  dfnode   = data.iloc[ind,].copy()
+  seqs     = dfnode[col].to_list()
+  centroid = data[col].iloc[centroid_i]
+  matrix, stats = compute_pal_motif(seqs = seqs, centroid = centroid)
+  return matrix
 
 
 def _matrix_to_regex(matrix, ntrim = 3, ctrim = 2, max_ambiguity = 3):
@@ -101,40 +90,6 @@ def _matrix_to_regex(matrix, ntrim = 3, ctrim = 2, max_ambiguity = 3):
 	return regex_pattern
 
 
-def _index_to_regex_str(ind, 
-						clone_df, 
-						pwmat, 
-						centroid = None,
-						col = 'cdr3_b_aa', 
-						ntrim = 3, 
-						ctrim = 2,  
-						max_ambiguity = 3):
-	"""
-	ind : list 
-		iloc row index in clone_df
-	clone_df : pd.DataFrae
-		DataFrame with cdr3 sequence
-	pwmat: np.ndarray
-		Matrix with pairwise inofrmation
-	col : str
-		'cdr3_b_aa', 
-	ntrim : int
-		default 3, 
-	ctrim : int
-		default 2,  
-	max_ambiguity : int
-		default 3, the maximum number of amino acids at a position before a '.' wildcard is applied
-	"""
-	
-	mat = _index_to_matrix(ind = ind, clone_df= clone_df, pwmat = pwmat, col = col, centroid = centroid )
-	
-	regex_str = _matrix_to_regex(matrix = mat, 
-		ntrim = ntrim, 
-		ctrim = ctrim, 
-		max_ambiguity =  max_ambiguity)
-
-	return(regex_str)
-
 
 def _multi_regex(regex , bkgd_cdr3):
 	"""
@@ -148,3 +103,130 @@ def _index_to_seqs(ind, clone_df, col):
 	dfnode   = clone_df.iloc[ind,].copy()
 	seqs = dfnode[col].to_list()
 	return seqs 
+
+
+
+def generate_metaclonotypes(data, 
+                             centroids, 
+                             pt_to_node, 
+                             node_to_pt,
+                             binary_column = 'Epitope',
+                             cdr3_col = "CDR3",
+                             v_col = "V", 
+                             j_col = "J", 
+                             max_ambiguity = 5,
+                             max_ambiguity_small = 0):
+  import tqdm
+  store = list()
+  n = len(centroids.keys())
+  for node, nns in tqdm.tqdm(centroids.items(), total =n, desc="Generating Metaclonotype Patterns"):
+    
+    #print(node, data.iloc[node][['CDR3','Epitope']])
+    binvar = data.iloc[node][binary_column]
+    
+    v = data.iloc[node][v_col]
+    vfam = v.replace("TCRB","").replace("TRB","").split('*')[0].split("-")[0]
+    if len(vfam) == 2:
+      vfam = f"{vfam[0]}0{vfam[1]}"
+
+    j = data.iloc[node][j_col]
+    cdr3 = data.iloc[node][cdr3_col]
+
+    #<pt_i> parititon index
+    pt_i = node_to_pt.get(node)
+    #<full_community>
+    full_com = pt_to_node.get(pt_i)
+    #<community/greedy intersection>
+    nns_intersection = list(set(full_com).intersection(nns))
+    
+    x = _index_to_matrix(nns, data, col = cdr3_col, centroid_i= node )
+    x2 = _index_to_matrix(full_com, data, col = cdr3_col, centroid_i= node )
+    x3 = _index_to_matrix(nns_intersection, data, col = cdr3_col, centroid_i= node )
+    
+    if len(nns) < 4:
+      m = max_ambiguity_small 
+    else:
+      m = max_ambiguity
+
+    pattern1 = _matrix_to_regex(x, ntrim = 0, ctrim = 0, max_ambiguity = m)
+    
+    if len(full_com) < 4:
+      m = max_ambiguity_small 
+    else:
+      m = max_ambiguity
+      
+    pattern2 = _matrix_to_regex(x2, ntrim = 0, ctrim = 0, max_ambiguity = m)
+    
+    if len(nns_intersection) < 4:
+      m= max_ambiguity_small 
+    else:
+      m = max_ambiguity
+
+    pattern3 = _matrix_to_regex(x3, ntrim = 0, ctrim = 0, max_ambiguity = m)
+
+    nns_cdr3 =  "|".join(data[cdr3_col].iloc[nns].to_list())
+    com_cdr3 =  "|".join(data[cdr3_col].iloc[full_com].to_list())
+    n1 = len(nns)
+    n2 = len(full_com)
+    store.append((binvar,node,pt_i, vfam, v, j, cdr3, n1, n2, pattern1, pattern2, pattern3, nns_cdr3))
+    
+  df = pd.DataFrame(store, columns = f'binvar,node,partition,vfam,{v_col},{j_col},{cdr3_col},n1,n2,pattern1,pattern2,pattern3,nns_cdr3'.split(","))
+  df.index = df['node'].to_list()
+  #df.sort_values('n1', ascending = False).head(30)  
+  return df
+
+
+
+# def _index_to_matrix(ind, clone_df, pwmat = None, col = 'cdr3_b_aa', centroid = None ):
+# 	"""
+# 	Example
+# 	-------
+
+
+# 	"""
+# 	dfnode   = clone_df.iloc[ind,].copy()
+
+# 	seqs = dfnode[col].to_list()
+# 	if centroid is None:
+# 		pwnode   = pwmat[ind,:][:,ind].copy()
+# 		iloc_idx = pwnode.sum(axis = 0).argmin() 
+# 		centroid = dfnode[col].to_list()[iloc_idx]
+	
+# 	matrix, stats = compute_pal_motif(seqs = seqs, centroid = centroid)
+# 	return matrix
+
+
+
+# def _index_to_regex_str(ind, 
+# 						clone_df, 
+# 						pwmat, 
+# 						centroid = None,
+# 						col = 'cdr3_b_aa', 
+# 						ntrim = 3, 
+# 						ctrim = 2,  
+# 						max_ambiguity = 3):
+# 	"""
+# 	ind : list 
+# 		iloc row index in clone_df
+# 	clone_df : pd.DataFrae
+# 		DataFrame with cdr3 sequence
+# 	pwmat: np.ndarray
+# 		Matrix with pairwise inofrmation
+# 	col : str
+# 		'cdr3_b_aa', 
+# 	ntrim : int
+# 		default 3, 
+# 	ctrim : int
+# 		default 2,  
+# 	max_ambiguity : int
+# 		default 3, the maximum number of amino acids at a position before a '.' wildcard is applied
+# 	"""
+	
+# 	mat = _index_to_matrix(ind = ind, clone_df= clone_df, pwmat = pwmat, col = col, centroid = centroid )
+	
+# 	regex_str = _matrix_to_regex(matrix = mat, 
+# 		ntrim = ntrim, 
+# 		ctrim = ctrim, 
+# 		max_ambiguity =  max_ambiguity)
+
+# 	return(regex_str)
