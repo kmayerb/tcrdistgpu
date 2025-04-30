@@ -1,5 +1,7 @@
 """
 """
+import pandas as pd 
+
 def run_louvain(G, resolution = 1, random_state =1 ):
 	import networkx as nx
 	from community import community_louvain
