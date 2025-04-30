@@ -176,56 +176,56 @@ def generate_metaclonotypes(data,
 	store = list()
 	n = len(centroids.keys())
 	for node, nns in tqdm.tqdm(centroids.items(), total =n, desc="Generating Metaclonotype Patterns"):
-	
-	#print(node, data.iloc[node][['CDR3','Epitope']])
-	binvar = data.iloc[node][binary_column]
-	
-	v = data.iloc[node][v_col]
-	vfam = v.replace("TCRB","").replace("TRB","").split('*')[0].split("-")[0]
-	if len(vfam) == 2:
-		vfam = f"{vfam[0]}0{vfam[1]}"
-
-	j = data.iloc[node][j_col]
-	cdr3 = data.iloc[node][cdr3_col]
-
-	#<pt_i> parititon index
-	pt_i = node_to_pt.get(node)
-	#<full_community>
-	full_com = pt_to_node.get(pt_i)
-	#<community/greedy intersection>
-	nns_intersection = list(set(full_com).intersection(nns))
-	
-	x = _index_to_matrix(nns, data, col = cdr3_col, centroid_i= node )
-	x2 = _index_to_matrix(full_com, data, col = cdr3_col, centroid_i= node )
-	x3 = _index_to_matrix(nns_intersection, data, col = cdr3_col, centroid_i= node )
-	
-	if len(nns) < 4:
-		m = max_ambiguity_small 
-	else:
-		m = max_ambiguity
-
-	pattern1 = _matrix_to_regex(x, ntrim = 0, ctrim = 0, max_ambiguity = m)
-	
-	if len(full_com) < 4:
-		m = max_ambiguity_small 
-	else:
-		m = max_ambiguity
 		
-	pattern2 = _matrix_to_regex(x2, ntrim = 0, ctrim = 0, max_ambiguity = m)
-	
-	if len(nns_intersection) < 4:
-		m= max_ambiguity_small 
-	else:
-		m = max_ambiguity
+		#print(node, data.iloc[node][['CDR3','Epitope']])
+		binvar = data.iloc[node][binary_column]
+		
+		v = data.iloc[node][v_col]
+		vfam = v.replace("TCRB","").replace("TRB","").split('*')[0].split("-")[0]
+		if len(vfam) == 2:
+			vfam = f"{vfam[0]}0{vfam[1]}"
 
-	pattern3 = _matrix_to_regex(x3, ntrim = 0, ctrim = 0, max_ambiguity = m)
+		j = data.iloc[node][j_col]
+		cdr3 = data.iloc[node][cdr3_col]
 
-	nns_cdr3 =  "|".join(data[cdr3_col].iloc[nns].to_list())
-	com_cdr3 =  "|".join(data[cdr3_col].iloc[full_com].to_list())
-	n1 = len(nns)
-	n2 = len(full_com)
-	store.append((binvar,node,pt_i, vfam, v, j, cdr3, n1, n2, pattern1, pattern2, pattern3, nns_cdr3))
-	
+		#<pt_i> parititon index
+		pt_i = node_to_pt.get(node)
+		#<full_community>
+		full_com = pt_to_node.get(pt_i)
+		#<community/greedy intersection>
+		nns_intersection = list(set(full_com).intersection(nns))
+		
+		x = _index_to_matrix(nns, data, col = cdr3_col, centroid_i= node )
+		x2 = _index_to_matrix(full_com, data, col = cdr3_col, centroid_i= node )
+		x3 = _index_to_matrix(nns_intersection, data, col = cdr3_col, centroid_i= node )
+		
+		if len(nns) < 4:
+			m = max_ambiguity_small 
+		else:
+			m = max_ambiguity
+
+		pattern1 = _matrix_to_regex(x, ntrim = 0, ctrim = 0, max_ambiguity = m)
+		
+		if len(full_com) < 4:
+			m = max_ambiguity_small 
+		else:
+			m = max_ambiguity
+			
+		pattern2 = _matrix_to_regex(x2, ntrim = 0, ctrim = 0, max_ambiguity = m)
+		
+		if len(nns_intersection) < 4:
+			m= max_ambiguity_small 
+		else:
+			m = max_ambiguity
+
+		pattern3 = _matrix_to_regex(x3, ntrim = 0, ctrim = 0, max_ambiguity = m)
+
+		nns_cdr3 =  "|".join(data[cdr3_col].iloc[nns].to_list())
+		com_cdr3 =  "|".join(data[cdr3_col].iloc[full_com].to_list())
+		n1 = len(nns)
+		n2 = len(full_com)
+		store.append((binvar,node,pt_i, vfam, v, j, cdr3, n1, n2, pattern1, pattern2, pattern3, nns_cdr3))
+		
 	df = pd.DataFrame(store, columns = f'binvar,node,partition,vfam,{v_col},{j_col},{cdr3_col},n1,n2,pattern1,pattern2,pattern3,nns_cdr3'.split(","))
 	df.index = df['node'].to_list()
 	#df.sort_values('n1', ascending = False).head(30)  
