@@ -472,6 +472,80 @@ class TCRgpu:
             x = self.compute_csr(encoded1= e_data, encoded2= e_data, mode = mode, max_k = max_k, max_dist = max_dist)
         return(x)
 
+    def compute_csr_experimental(self, encoded1=None, encoded2=None, mode=None, max_k=None, max_dist=None):
+        import time
+        import numpy as np
+        from scipy.sparse import coo_matrix
+    
+        if mode is None:
+            mode = self.mode
+        if mode == "cpu":
+            import numpy as mx
+        elif mode == "cuda":
+            import cupy as mx
+            self.submat = mx.array(self.submat)
+        elif mode == "apple_silicon":
+            import mlx.core as mx
+        else:
+            raise ValueError("Mode must be one of {cpu, cuda, apple_silicon}")
+    
+        if encoded1 is None:
+            encoded1 = self.encoded
+        if encoded2 is None:
+            encoded2 = self.encoded
+    
+        tcrs1 = mx.array(encoded1).astype(mx.uint8)
+        tcrs2 = mx.array(encoded2).astype(mx.uint8)
+    
+        nrow, ncol = tcrs1.shape[0], tcrs2.shape[0]
+        row_list, col_list, data_list = [], [], []
+    
+        start_time = time.time()
+    
+        for ch in tqdm(range(0, nrow, self.chunk_size)):
+            chunk_end = min(ch + self.chunk_size, nrow)
+            row_range = slice(ch, chunk_end)
+    
+            dists = mx.sum(self.submat[tcrs1[row_range, None, :], tcrs2[None, :, :]], axis=2)
+    
+            if max_dist is not None:
+                mask = dists <= max_dist
+                ixs, jxs = mx.nonzero(mask)
+                vals = dists[ixs, jxs]
+                row_list.append((ixs + ch).get() if mode == "cuda" else (ixs + ch))
+                col_list.append(jxs.get() if mode == "cuda" else jxs)
+                data_list.append(mx.maximum(1, vals).get() if mode == "cuda" else mx.maximum(1, vals))
+    
+            elif max_k is not None:
+                k = min(max_k, dists.shape[1])
+                part = mx.argpartition(dists, kth=k, axis=1)[:, :k]
+                part_vals = dists[mx.arange(dists.shape[0])[:, None], part]
+    
+                sorted_idx = mx.argsort(part_vals, axis=1)
+                sorted_part = part[mx.arange(part.shape[0])[:, None], sorted_idx]
+                sorted_vals = mx.sort(part_vals, axis=1)
+    
+                ixs = mx.arange(chunk_end - ch).reshape(-1, 1).repeat(k, axis=1) + ch
+                row_list.append(ixs.reshape(-1).get() if mode == "cuda" else ixs.reshape(-1))
+                col_list.append(sorted_part.reshape(-1).get() if mode == "cuda" else sorted_part.reshape(-1))
+                data_list.append(mx.maximum(1, sorted_vals).reshape(-1).get() if mode == "cuda" else mx.maximum(1, sorted_vals).reshape(-1))
+    
+            else:
+                ixs = mx.arange(chunk_end - ch).reshape(-1, 1).repeat(ncol, axis=1) + ch
+                jxs = mx.arange(ncol).reshape(1, -1).repeat(chunk_end - ch, axis=0)
+                row_list.append(ixs.reshape(-1).get() if mode == "cuda" else ixs.reshape(-1))
+                col_list.append(jxs.reshape(-1).get() if mode == "cuda" else jxs.reshape(-1))
+                data_list.append(dists.reshape(-1).get() if mode == "cuda" else dists.reshape(-1))
+    
+        # Finalize sparse matrix construction
+        all_rows = np.concatenate(row_list)
+        all_cols = np.concatenate(col_list)
+        all_vals = np.concatenate(data_list)
+    
+        sparse_mat = coo_matrix((all_vals, (all_rows, all_cols)), shape=(nrow, ncol)).tocsr()
+    
+        print(f"MODE: {mode} -- {time.time() - start_time:.2f} seconds")
+        return sparse_mat
 
     def compute_csr(self, encoded1= None, encoded2=None, mode = None, max_k = None, max_dist = None):
         """
