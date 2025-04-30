@@ -6,7 +6,6 @@ def run_louvain(G, resolution = 1, random_state =1 ):
 	node_to_cluster = community_louvain.best_partition(G, 
 		random_state = random_state, 
 		resolution = resolution)
-	return node_to_cluster
 	pt_to_node, node_to_pt = get_pt(node_to_cluster)
 	centroids = None
 	return pt_to_node, node_to_pt, centroids
@@ -79,6 +78,7 @@ def get_pt(partition):
 
 
 def nx_to_igraph(G):
+	import igraph as ig
 	mapping = dict(zip(G.nodes(), range(len(G.nodes()))))
 	reverse_mapping = {v: k for k, v in mapping.items()}
 	edges = [(mapping[u], mapping[v]) for u, v in G.edges()]
