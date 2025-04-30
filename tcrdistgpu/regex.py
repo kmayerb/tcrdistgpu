@@ -116,6 +116,62 @@ def generate_metaclonotypes(data,
                              j_col = "J", 
                              max_ambiguity = 5,
                              max_ambiguity_small = 0):
+	"""
+	Generate metaclonotype patterns for a set of centroid nodes and their neighborhoods.
+
+	This function computes regex-based CDR3 sequence motifs for each centroid node and its
+	neighbors based on three groupings: (1) the immediate neighbors (centroids) from greedy clustering, 
+	(2) the full community from Louvain/Leiden/Greedy clustering (pt_to_node), and (3) their intersection.
+	It outputs a DataFrame summarizing the derived patterns and associated metadata.
+
+	Parameters
+	----------
+	data : pd.DataFrame
+	    A DataFrame containing TCR sequence information, including CDR3, V, J, and binary labels.
+	centroids : dict
+	    Dictionary mapping node indices (centroids) to lists of nearest neighbor indices.
+	pt_to_node : dict
+	    Dictionary mapping partition indices to sets of node indices from Leiden clustering.
+	node_to_pt : dict
+	    Dictionary mapping node indices to their corresponding partition index.
+	binary_column : str, optional
+	    Column in `data` representing the binary class label (e.g., 'Epitope'), by default 'Epitope'.
+	cdr3_col : str, optional
+	    Column in `data` with CDR3 amino acid sequences, by default "CDR3".
+	v_col : str, optional
+	    Column name for V gene usage, by default "V".
+	j_col : str, optional
+	    Column name for J gene usage, by default "J".
+	max_ambiguity : int, optional
+	    Maximum ambiguity allowed when constructing regex patterns for large neighborhoods, by default 5.
+	max_ambiguity_small : int, optional
+	    Maximum ambiguity allowed when neighborhood size < 4, by default 0.
+
+	Returns
+	-------
+	pd.DataFrame
+	    A DataFrame with one row per centroid, containing:
+	    - binary class
+	    - node index
+	    - Leiden partition index
+	    - simplified V-family (vfam)
+	    - V and J gene
+	    - CDR3 sequence of centroid
+	    - neighborhood sizes
+	    - regex patterns for each of the three neighborhood types
+	    - concatenated CDR3 strings from neighbors
+
+	Notes
+	-----
+	This function assumes `data` is indexed such that `iloc[node]` refers to the correct row
+	for a given node. 
+
+	Dependencies
+	------------
+	- tqdm for progress display
+	- _index_to_matrix: user-defined function to extract aligned CDR3 matrices
+	- _matrix_to_regex: user-defined function to derive regex from sequence matrices
+	"""
   import tqdm
   store = list()
   n = len(centroids.keys())
