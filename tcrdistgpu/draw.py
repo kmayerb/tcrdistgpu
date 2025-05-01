@@ -23,6 +23,7 @@ def draw_categories(
     edge_color_col=None,  # <- NEW: optional column to map node edge colors
     edge_key_to_color = None,
     legend = False,
+    savefig = "test.pdf",
     edge_palette='Set2',  # <- NEW: palette for node edge colors
     **kwargs):
     
@@ -77,7 +78,11 @@ def draw_categories(
     )
 
     plt.axis('off')
+
+    if savefig is not None:
+        plt.savefig(savefig)
     plt.show()
+   
     if legend:
       show_legend(key_to_color, title=color_col)
       if edge_color_col:
@@ -97,6 +102,7 @@ def draw_continuous(
     size_scale = 1.0,
     size_clip=(2, 300),
     alpha = .5,
+    savefig = None,
     vmin=-2,  # <- NEW
     vmax=3,  # <- NEW
     **kwargs):
@@ -159,7 +165,10 @@ def draw_continuous(
     cbar.set_label(continuous_color)
 
     plt.axis('off')
+    if savefig is not None:
+        plt.savefig(savefig)
     plt.show()
+   
 
 
 
