@@ -154,3 +154,29 @@ def largest_column_less_than_x(arr: np.ndarray, x: float) -> np.ndarray:
     return np.where(has_true, col_idx, 0)
 
 
+import numpy as np
+from scipy.sparse import csr_matrix
+
+def threshold_csr_rows(matrix: csr_matrix, row_thresholds: np.ndarray) -> None:
+    """
+    Set to zero all entries in a CSR matrix that exceed the corresponding per-row threshold.
+
+    Parameters
+    ----------
+    matrix : csr_matrix
+        Sparse matrix in CSR format. Modified in place.
+    row_thresholds : np.ndarray
+        1D array of shape (n_rows,) with threshold values for each row.
+    """
+    matrix = matrix.copy()
+    if matrix.shape[0] != len(row_thresholds):
+        raise ValueError("row_thresholds must match number of rows in matrix.")
+
+    for i in range(matrix.shape[0]):
+        start, end = matrix.indptr[i], matrix.indptr[i + 1]
+        row_data = matrix.data[start:end]
+        row_mask = row_data <= row_thresholds[i]
+        matrix.data[start:end] = row_data * row_mask  # zero-out entries > threshold
+
+    matrix.eliminate_zeros()  # remove explicit zeros to preserve sparsity
+    return matrix
