@@ -1,11 +1,5 @@
 # tcrdistgpu
 
-## Credit
-
-* The idea for a GPU accerlated TCRdist and initial code -- mikhail.pogorelyy@stjude.org (Mikhail Pogorelyy).
-* Python package and implemenation CPU, GPU accerlated TCRdist -- kmayerbl@fredhutch.org (Koshlan Mayer-Blackwell)
-
-
 ### Limitations
 
 Currently only works for human TCR data.
@@ -14,10 +8,8 @@ Currently only works for human TCR data.
 ### Install
 
 ```
-pip install git+https://kmayerb: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@github.com/kmayerb/tcrdistgpu.git
+pip install git+https://github.com/kmayerb/tcrdistgpu.git
 ```
-
-
 
 ## Basics 
 
@@ -195,6 +187,10 @@ package_data = os.path.join(os.path.dirname(package_location), 'data')
 print(os.listdir(package_data))
 ```
 
+
+## Credit
+
+The idea for a GPU accerlated TCRdist and initial code -- mikhail.pogorelyy@stjude.org (Mikhail Pogorelyy). Python package and implemenation CPU, GPU accerlated TCRdist -- kmayerbl@fredhutch.org (Koshlan Mayer-Blackwell).
 
 
 
