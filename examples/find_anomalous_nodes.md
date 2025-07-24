@@ -15,9 +15,7 @@ Install the required packages:
 pip install tcrdistgpu tcrshuffler fishersapi pandas numpy networkx
 
 # For visualization (optional)
-pip install matplotlib 
-apt install libgraphviz-dev
-pip install pygraphviz
+pip install matplotlib seaborn pygraphviz
 ```
 
 ## Step 1: Import Required Libraries
@@ -30,7 +28,7 @@ from scipy.sparse import csr_matrix
 
 # Core tcrdistgpu imports
 from tcrdistgpu.distance import TCRgpu
-from tcrdistgpu.radius import calc_radii, count_neighbors_below_radii_per_row
+from tcrdistgpu.radius import calc_radii, count_neighbors_below_radii_per_row, threshold_csr_rows
 from tcrdistgpu.draw import draw_categories, draw_continuous
 
 # Shuffling and statistical testing
@@ -335,37 +333,183 @@ if len(significant_tcrs) > 0:
         print()
 ```
 
-## Step 12: Network Analysis (Optional)
+## Step 12: Create Thresholded Distance Matrix
 
-If you have significant TCRs, you can create network visualizations to see clustering patterns.
-
-### 12.1: Create Network Graph
+Before creating the network, we need to threshold the distance matrix using our calculated radii to keep only the meaningful connections.
 
 ```python
-if len(significant_tcrs) > 1:
-    print("Creating network visualization...")
+from tcrdistgpu.radius import threshold_csr_rows
+
+print("Thresholding distance matrix with calculated radii...")
+
+# Apply radii thresholds to the distance matrix
+# This keeps only distances below each TCR's statistical radius
+Sx = threshold_csr_rows(S, radii)
+
+print(f"Original matrix S shape: {S.shape}")
+print(f"Thresholded matrix Sx shape: {Sx.shape}")
+print(f"Original matrix non-zero elements: {S.nnz}")
+print(f"Thresholded matrix non-zero elements: {Sx.nnz}")
+print(f"Reduction in connections: {((S.nnz - Sx.nnz) / S.nnz * 100):.1f}%")
+```
+
+## Step 13: Extract Significant TCRs for Network Analysis
+
+Now we'll create a network focusing only on the statistically significant TCRs.
+
+### 13.1: Get Significant TCR Indices
+
+```python
+# Get indices of significant TCRs for network analysis
+significant_threshold = 0.0005  # Adjust as needed
+significant_tcrs = result.query(f'p_exact < {significant_threshold}')
+ix = sorted(significant_tcrs.index.tolist())
+
+print(f"Found {len(ix)} significant TCRs for network analysis")
+print(f"Significant TCR indices: {ix[:10]}..." if len(ix) > 10 else f"Significant TCR indices: {ix}")
+```
+
+### 13.2: Create Submatrix with Only Significant TCRs
+
+```python
+# Note: keep_only_rows function may need to be implemented
+# Here's a simple implementation to extract rows and columns for significant TCRs
+
+def keep_only_rows(matrix, indices):
+    """
+    Extract submatrix containing only specified row/column indices
+    """
+    # Convert to dense if needed for indexing, then back to sparse
+    if len(indices) == 0:
+        return matrix[:0, :0]  # Return empty matrix
     
-    # Get indices of significant TCRs
-    significant_indices = significant_tcrs.index.tolist()
-    print(f"Creating network from {len(significant_indices)} significant TCRs")
+    # Extract submatrix using advanced indexing
+    submatrix = matrix[indices, :][:, indices]
+    return submatrix
+
+if len(ix) > 1:
+    print("Creating submatrix with significant TCRs only...")
+    Sx2 = keep_only_rows(Sx, ix)
     
-    # Create network from distance matrix
-    G = nx.from_scipy_sparse_array(S)
+    print(f"Significant TCR submatrix shape: {Sx2.shape}")
+    print(f"Non-zero elements in submatrix: {Sx2.nnz}")
+else:
+    print("Not enough significant TCRs for network analysis")
+    Sx2 = None
+```
+
+## Step 14: Network Visualization
+
+Now we can create and visualize the network of significant TCRs.
+
+### 14.1: Create Network Graph
+
+```python
+if Sx2 is not None and Sx2.nnz > 0:
+    print("Creating network from significant TCRs...")
     
-    # Remove isolated nodes (TCRs with no close neighbors)
+    # Convert sparse matrix to NetworkX graph
+    G = nx.from_scipy_sparse_array(Sx2)
+    
+    # Remove isolated nodes (TCRs with no connections)
     isolated_nodes = list(nx.isolates(G))
     G.remove_nodes_from(isolated_nodes)
     
-    print(f"Network: {G.number_of_nodes()} nodes, {G.number_of_edges()} edges")
-    print(f"Removed {len(isolated_nodes)} isolated nodes")
+    print(f"Network created:")
+    print(f"  Nodes: {G.number_of_nodes()}")
+    print(f"  Edges: {G.number_of_edges()}")
+    print(f"  Isolated nodes removed: {len(isolated_nodes)}")
+    
+    if G.number_of_nodes() == 0:
+        print("Warning: No connected nodes in network")
+        G = None
 else:
-    print("Not enough significant TCRs for network analysis")
+    print("Cannot create network: no significant connections found")
+    G = None
 ```
 
-### 12.2: Basic Network Statistics
+### 14.2: Prepare Data for Visualization
 
 ```python
-if 'G' in locals() and G.number_of_nodes() > 0:
+if G is not None and G.number_of_nodes() > 0:
+    # Create categorical variable for visualization
+    # Map the original significant TCR data to the network nodes
+    
+    # Extract data for significant TCRs only
+    sig_data = data.iloc[ix].copy()
+    
+    # Create size/color categories based on templates (if available)
+    if 'templates' in sig_data.columns:
+        sig_data['gt1'] = sig_data['templates'].apply(
+            lambda x: 10 if x > 10 else 5 if x > 5 else 2 if x > 1 else 1
+        )
+        print("Created template-based categories (gt1)")
+    else:
+        # Create categories based on neighbor count if templates not available
+        sig_data['gt1'] = result.iloc[ix]['nn_below_radii'].apply(
+            lambda x: 10 if x > 10 else 5 if x > 5 else 2 if x > 1 else 1
+        )
+        print("Created neighbor-based categories (gt1)")
+    
+    print("Data prepared for visualization")
+    print(f"Category distribution: {sig_data['gt1'].value_counts().sort_index()}")
+```
+
+### 14.3: Create Network Visualizations
+
+```python
+if G is not None and G.number_of_nodes() > 0:
+    print("Creating network visualizations...")
+    
+    try:
+        # Categorical visualization (colored by template/neighbor count)
+        draw_categories(
+            G=G, 
+            data=sig_data, 
+            color_col='gt1', 
+            width=10, 
+            height=10,
+            size_col='gt1', 
+            size_scale=1, 
+            savefig='tcr_network_categories.png',
+            legend=True
+        )
+        print("✓ Categorical network plot saved as 'tcr_network_categories.png'")
+        
+    except Exception as e:
+        print(f"Categorical visualization failed: {e}")
+    
+    try:
+        # Continuous visualization (colored by p-values)
+        # Add p-values to the significant data
+        sig_data_with_p = sig_data.copy()
+        sig_data_with_p['nlog10_pexact'] = -np.log10(result.iloc[ix]['p_exact'])
+        
+        draw_continuous(
+            G=G, 
+            data=sig_data_with_p,
+            continuous_color='nlog10_pexact',
+            width=10, 
+            height=10,
+            size_col='gt1', 
+            size_scale=1, 
+            vmin=0, 
+            vmax=12,
+            savefig='tcr_network_pvalues.png'
+        )
+        print("✓ Continuous network plot saved as 'tcr_network_pvalues.png'")
+        
+    except Exception as e:
+        print(f"Continuous visualization failed: {e}")
+
+else:
+    print("Skipping visualization: no network to display")
+```
+
+### 14.4: Network Statistics
+
+```python
+if G is not None and G.number_of_nodes() > 0:
     # Calculate basic network properties
     print("\nNetwork Statistics:")
     print(f"Nodes: {G.number_of_nodes()}")
@@ -379,10 +523,19 @@ if 'G' in locals() and G.number_of_nodes() > 0:
     if len(components) > 0:
         component_sizes = [len(comp) for comp in components]
         print(f"Largest component size: {max(component_sizes)}")
-        print(f"Component sizes distribution: {sorted(component_sizes, reverse=True)[:10]}")
+        print(f"Component size distribution: {sorted(component_sizes, reverse=True)[:10]}")
+        
+        # Show details of largest components
+        print("\nLargest connected components:")
+        for i, component in enumerate(sorted(components, key=len, reverse=True)[:3]):
+            print(f"Component {i+1}: {len(component)} nodes")
+            # Map back to original TCR indices
+            original_indices = [ix[node] for node in component]
+            component_tcrs = data.iloc[original_indices]
+            print(f"  TCR examples: {component_tcrs[cdr3_col].head(3).tolist()}")
 ```
 
-## Step 13: Save Results
+## Step 15: Save Results
 
 ```python
 # Save the complete results
@@ -414,7 +567,7 @@ with open(summary_file, 'w') as f:
 print(f"Analysis summary saved to: {summary_file}")
 ```
 
-## Step 14: Interpretation and Next Steps
+## Step 16: Interpretation and Next Steps
 
 ```python
 print("\n" + "="*60)
