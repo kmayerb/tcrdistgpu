@@ -180,3 +180,66 @@ def threshold_csr_rows(matrix: csr_matrix, row_thresholds: np.ndarray) -> None:
 
     matrix.eliminate_zeros()  # remove explicit zeros to preserve sparsity
     return matrix
+
+import numpy as np
+from scipy.sparse import csr_matrix
+
+def get_ij_pairs_below_threshold_per_row(matrix: csr_matrix, min_values: np.ndarray) -> list[tuple[int, int]]:
+    """
+    Return (i, j) index pairs where matrix[i, j] < min_values[i], for CSR matrix.
+
+    Parameters
+    ----------
+    matrix : csr_matrix
+        Sparse matrix in CSR format.
+    min_values : np.ndarray
+        1D array of shape (n_rows,) with threshold values for each row.
+
+    Returns
+    -------
+    list of tuple[int, int]
+        List of (i, j) pairs where matrix[i, j] < min_values[i].
+    """
+    if matrix.shape[0] != len(min_values):
+        raise ValueError("Length of min_values must match number of rows in matrix.")
+
+    result = []
+    for i in range(matrix.shape[0]):
+        row_start, row_end = matrix.indptr[i], matrix.indptr[i + 1]
+        row_data = matrix.data[row_start:row_end]
+        row_indices = matrix.indices[row_start:row_end]
+        threshold = min_values[i]
+        for j, val in zip(row_indices, row_data):
+            if val < threshold:
+                result.append((int(i), int(j)))
+    return result
+
+
+from scipy.sparse import csr_matrix
+
+def keep_only_rows(matrix: csr_matrix, row_idx: int) -> csr_matrix:
+    """
+    Set all rows except row_idx to zero in a CSR matrix, then eliminate zeros.
+
+    Parameters
+    ----------
+    matrix : csr_matrix
+        Input sparse matrix.
+    row_idx : int
+        Index of the row to keep.
+
+    Returns
+    -------
+    csr_matrix
+        Modified matrix with only row_idx preserved.
+    """
+    matrix = matrix.copy()
+    n_rows = matrix.shape[0]
+
+    for i in range(n_rows):
+        if i not in row_idx:
+            start, end = matrix.indptr[i], matrix.indptr[i+1]
+            matrix.data[start:end] = 0
+
+    matrix.eliminate_zeros()
+    return matrix
