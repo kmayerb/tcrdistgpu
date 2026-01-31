@@ -38,9 +38,15 @@ def draw_network(
     border_color_map=None,
     border_width=1,
     
+    # Labels
+    label_by=None,
+    label_size=8,
+    label_color='black',
+    
     # Figure
     figsize=(8, 8),
     alpha=0.9,
+    title=None,
     
     # Graph settings
     remove_self_loops=True,
@@ -98,10 +104,18 @@ def draw_network(
         Manual mapping for border colors
     border_width : float
         Width of node borders
+    label_by : str, optional
+        Column name to use for node labels
+    label_size : int
+        Font size for node labels
+    label_color : str
+        Color for node labels
     figsize : tuple
         Figure size as (width, height)
     alpha : float
         Transparency of nodes
+    title : str, optional
+        Title to display at top of plot
     remove_self_loops : bool
         Whether to remove self-loops from graph
     layout : str
@@ -202,6 +216,17 @@ def draw_network(
         **kwargs
     )
     
+    # Draw node labels if requested
+    if label_by is not None:
+        labels = {node: str(data.loc[node, label_by]) if node in data.index else str(node) 
+                  for node in G.nodes}
+        nx.draw_networkx_labels(
+            G, pos, labels,
+            font_size=label_size,
+            font_color=label_color,
+            ax=ax
+        )
+    
     # Add colorbar for continuous data
     if color_type == 'continuous' and show_colorbar and color_mapper is not None:
         sm = plt.cm.ScalarMappable(cmap=color_mapper, norm=norm)
@@ -210,6 +235,10 @@ def draw_network(
         cbar.set_label(color_by if legend_title is None else legend_title)
     
     ax.axis('off')
+    
+    # Add title if provided
+    if title:
+        ax.set_title(title, fontsize=14, fontweight='bold', pad=20)
     
     # Show legend for categorical data
     legend_path = None
