@@ -543,9 +543,22 @@ class TCRgpu:
         all_vals = np.concatenate(data_list)
     
         sparse_mat = coo_matrix((all_vals, (all_rows, all_cols)), shape=(nrow, ncol)).tocsr()
-    
+
         print(f"MODE: {mode} -- {time.time() - start_time:.2f} seconds")
         return sparse_mat
+
+    def compute_csr_fast(self, encoded1=None, encoded2=None, mode=None, max_k=None, max_dist=None):
+        """
+        Faster sparse matrix computation. Thin wrapper around compute_csr_experimental.
+
+        Uses vectorized COO-format construction instead of the dok_matrix inner-loop
+        approach in compute_csr, making it substantially faster for large datasets.
+        compute_csr is retained for backward compatibility.
+        """
+        return self.compute_csr_experimental(
+            encoded1=encoded1, encoded2=encoded2,
+            mode=mode, max_k=max_k, max_dist=max_dist
+        )
 
     def compute_csr(self, encoded1= None, encoded2=None, mode = None, max_k = None, max_dist = None):
         """
@@ -741,6 +754,67 @@ class TCRgpu:
             seq_j = tcrs2.iloc[j,:].to_list()
             print(i,j,dists[ix],seq_i, seq_j)
 
+    @staticmethod
+    def _valid_cdr3(cdr3):
+        """Return True iff cdr3 is a string of ≥5 standard amino acids."""
+        amino_acids = set("ACDEFGHIKLMNPQRSTVWY")
+        return isinstance(cdr3, str) and len(cdr3) >= 5 and all(aa in amino_acids for aa in cdr3)
+
+    def filter_tcrs(self, df, chain="ab",
+                    va_col=None, vb_col=None,
+                    cdr3a_col=None, cdr3b_col=None):
+        """
+        Filter a DataFrame of TCR sequences to rows that can be safely encoded.
+
+        Removes rows where V gene names are not in the internal parameter table
+        or CDR3 sequences contain non-standard amino acids or are shorter than 5
+        residues. Column name arguments default to those set on the TCRgpu instance.
+
+        Parameters
+        ----------
+        df : pd.DataFrame
+            DataFrame containing TCR sequences.
+        chain : str
+            Which chains to validate: "a", "b", or "ab". Default "ab".
+        va_col : str, optional
+            Alpha V gene column name. Defaults to self.va_col.
+        vb_col : str, optional
+            Beta V gene column name. Defaults to self.vb_col.
+        cdr3a_col : str, optional
+            Alpha CDR3 column name. Defaults to self.cdr3a_col.
+        cdr3b_col : str, optional
+            Beta CDR3 column name. Defaults to self.cdr3b_col.
+
+        Returns
+        -------
+        pd.DataFrame
+            Filtered DataFrame with reset index.
+
+        Example
+        -------
+        tg = TCRgpu(mode="cpu", va_col="va", vb_col="vb",
+                    cdr3a_col="cdr3a", cdr3b_col="cdr3b")
+        data_clean = tg.filter_tcrs(data_raw, chain="ab")
+        """
+        if va_col is None:
+            va_col = self.va_col
+        if vb_col is None:
+            vb_col = self.vb_col
+        if cdr3a_col is None:
+            cdr3a_col = self.cdr3a_col
+        if cdr3b_col is None:
+            cdr3b_col = self.cdr3b_col
+
+        mask = pd.Series(True, index=df.index)
+        if "a" in chain:
+            mask &= df[va_col].isin(self.params_vec.keys())
+            mask &= df[cdr3a_col].apply(self._valid_cdr3)
+        if "b" in chain:
+            mask &= df[vb_col].isin(self.params_vec.keys())
+            mask &= df[cdr3b_col].apply(self._valid_cdr3)
+        dropped = (~mask).sum()
+        print(f"Dropped {dropped} of {len(df)} rows ({dropped/len(df):.1%})")
+        return df[mask].reset_index(drop=True)
 
 
 def matrix_to_dict(matrix, headers):
