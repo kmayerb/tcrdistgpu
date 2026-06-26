@@ -467,9 +467,9 @@ class TCRgpu:
             else:
                 raise ValueError
         if data2 is not None:        
-            x = self.compute_csr(encoded1= e_data, encoded2= e_data2, mode = mode, max_k = max_k, max_dist = max_dist)
+            x = self.compute_csr_fast(encoded1= e_data, encoded2= e_data2, mode = mode, max_k = max_k, max_dist = max_dist)
         else:
-            x = self.compute_csr(encoded1= e_data, encoded2= e_data, mode = mode, max_k = max_k, max_dist = max_dist)
+            x = self.compute_csr_fast(encoded1= e_data, encoded2= e_data, mode = mode, max_k = max_k, max_dist = max_dist)
         return(x)
 
     def compute_csr_experimental(self, encoded1=None, encoded2=None, mode=None, max_k=None, max_dist=None):
