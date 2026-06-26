@@ -1,8 +1,8 @@
 from setuptools import setup, find_packages
 
 setup(
-    name='train',
-    version='0.1',
+    name='tcrdistgpu',
+    version='1.0',
     packages=find_packages(),
     install_requires=[
         'pandas','numpy','pytest'
